@@ -36,7 +36,7 @@ class sample_rnn():
 		self.total_loss = 0.
 		self.mean_acc = 0.
 		self.outputs = []
-		self.losses = []
+		self.losses = 0.
 		
 		with tf.variable_scope('RNN') as scope:
 			for i in range(bptt_steps):
@@ -57,17 +57,14 @@ class sample_rnn():
 					hid2 = tf.nn.tanh(tf.matmul(hid1, self.weights['hidn2']) + self.biases['hidn2'])
 					out = tf.matmul(hid2, self.weights['out']) + self.biases['out']
 					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels[:, pred_index, :], logits=out))
+					if j==0:	self.o = loss
+					# review code from here
+					correct_pred = tf.equal(tf.argmax(out, 1), tf.argmax(labels[:, pred_index, :], 1))
+					accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+					self.losses+= loss
+					self.mean_acc += accuracy
+					if is_training is False:	self.outputs.append(tf.argmax(out, 1)[0])
 
-'''
-				output = tf.matmul(lstm_output, self.weights['hidden1']) + self.biases['hidden1']
-				loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=label[:, i, :], logits=output))
-				correct_pred = tf.equal(tf.argmax(output, 1), tf.argmax(label[:, i, :], 1))
-				accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-				self.total_loss += loss
-				self.mean_acc += accuracy
-				if is_training is False:	self.outputs.append(tf.argmax(output, 1)[0])
-
-		self.final_state = self.state
-		self.mean_acc/=(n_steps-1)
-		self.mean_acc*=100.
-'''
+			self.final_state = self.state
+			self.mean_acc /= (bptt_steps*global_context_size)
+			self.losses /= (bptt_steps*global_context_size)
