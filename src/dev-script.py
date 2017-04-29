@@ -23,6 +23,8 @@ for i in range(len(data)):
 batch_size = 1
 global_context_size = 100
 bptt_steps = 10
+n_epochs = 200
+
 input = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps+global_context_size-1, 1])
 label = tf.placeholder(tf.uint8, [batch_size, global_context_size*bptt_steps, 16])
 t_model = model.sample_rnn(input, label, is_training=True)
@@ -35,19 +37,21 @@ with tf.Session() as sess:
 	sess.run(tf.global_variables_initializer())
 	z_state = (t_model.initial_state[0].eval(), t_model.initial_state[1].eval())
 
-	for i in range(len(inputs)):
-		print 'Training on clip #', i, '/', len(inputs)
-		current_clip = inputs[i]
-		n_bptt_batches = current_clip.shape[1] / (global_context_size * bptt_steps) - 1
-		np_state = z_state
-		for j in range(n_bptt_batches):
-			start_ptr = j*global_context_size*bptt_steps
-			end_ptr = (j+1)*global_context_size*bptt_steps + global_context_size - 1
-			bptt_batch_x = current_clip[:, start_ptr:end_ptr, :]
-			bptt_batch_y = labels[i][:, start_ptr+global_context_size:end_ptr+1, :]
-			bptt_batch_loss, np_state, op = sess.run([t_model.loss, t_model.final_state, optimizer], feed_dict={input:bptt_batch_x, label:bptt_batch_y, 
-													t_model.initial_state[0]:np_state[0], t_model.initial_state[1]:np_state[1]})
-			print 'loss at bptt index', j, ':', bptt_batch_loss	
-		save_path = saver.save(sess, "./params/last_model.ckpt")
-		print("Model saved in file: %s\n" % save_path)
+	for ep in range(n_epochs):
+		print 'epoch:', ep
+		for i in range(len(inputs)):
+			print 'Training on clip #', i, '/', len(inputs)
+			current_clip = inputs[i]
+			n_bptt_batches = current_clip.shape[1] / (global_context_size * bptt_steps) - 1
+			np_state = z_state
+			for j in range(n_bptt_batches):
+				start_ptr = j*global_context_size*bptt_steps
+				end_ptr = (j+1)*global_context_size*bptt_steps + global_context_size - 1
+				bptt_batch_x = current_clip[:, start_ptr:end_ptr, :]
+				bptt_batch_y = labels[i][:, start_ptr+global_context_size:end_ptr+1, :]
+				bptt_batch_loss, np_state, op = sess.run([t_model.loss, t_model.final_state, optimizer], feed_dict={input:bptt_batch_x, label:bptt_batch_y, 
+														t_model.initial_state[0]:np_state[0], t_model.initial_state[1]:np_state[1]})
+				print 'loss at bptt index', j, ':', bptt_batch_loss	
+			save_path = saver.save(sess, "./params/last_model.ckpt")
+			print("Model saved in file: %s\n" % save_path)
 	
