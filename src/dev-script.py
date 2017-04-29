@@ -22,7 +22,7 @@ for i in range(len(data)):
 
 batch_size = 1
 global_context_size = 100
-bptt_steps = 2
+bptt_steps = 10
 input = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps+global_context_size-1, 1])
 label = tf.placeholder(tf.uint8, [batch_size, global_context_size*bptt_steps, 16])
 t_model = model.sample_rnn(input, label, is_training=True)

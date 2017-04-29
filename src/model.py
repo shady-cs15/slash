@@ -15,7 +15,7 @@ import tensorflow as tf
 '''
 
 class sample_rnn():
-    def __init__(self, inputs, labels, bptt_steps=2, global_context_size=100, local_context_size=10, lstm_dim=500, sampl_dim=90, 
+    def __init__(self, inputs, labels, bptt_steps=10, global_context_size=100, local_context_size=10, lstm_dim=500, sampl_dim=90, 
     	hid_dim1=100, hid_dim2=100, out_dim=16, batch_size=1, is_training=True):
 
 		self.weights = {
