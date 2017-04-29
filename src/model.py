@@ -2,7 +2,7 @@ import tensorflow as tf
 
 ''' 
 	architecture is 2 tier
-	bptt_steps: # steps for bptt / bptt truncation threshold; default = 100 (1 second)
+	bptt_steps: # steps for bptt / bptt truncation threshold; default = 10 (1/10th second)
 	global_context_size: param for global context, default = 100
 	local_context_size: param for local context, default = 10
 	lstm_dim: dimension of the lstm layer for global context; default = 500
@@ -15,7 +15,7 @@ import tensorflow as tf
 '''
 
 class sample_rnn():
-    def __init__(self, inputs, labels, bptt_steps=100, global_context_size=100, local_context_size=10, lstm_dim=500, sampl_dim=90, 
+    def __init__(self, inputs, labels, bptt_steps=2, global_context_size=100, local_context_size=10, lstm_dim=500, sampl_dim=90, 
     	hid_dim1=100, hid_dim2=100, out_dim=16, batch_size=1, is_training=True):
 
 		self.weights = {
@@ -36,7 +36,7 @@ class sample_rnn():
 		self.total_loss = 0.
 		self.mean_acc = 0.
 		self.outputs = []
-		self.losses = 0.
+		self.loss = 0.
 		
 		with tf.variable_scope('RNN') as scope:
 			for i in range(bptt_steps):
@@ -56,15 +56,13 @@ class sample_rnn():
 					hid1 = tf.nn.tanh(tf.matmul(conc, self.weights['hidn1']) + self.biases['hidn1'])
 					hid2 = tf.nn.tanh(tf.matmul(hid1, self.weights['hidn2']) + self.biases['hidn2'])
 					out = tf.matmul(hid2, self.weights['out']) + self.biases['out']
-					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels[:, pred_index, :], logits=out))
-					if j==0:	self.o = loss
-					# review code from here
-					correct_pred = tf.equal(tf.argmax(out, 1), tf.argmax(labels[:, pred_index, :], 1))
+					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels[:, pred_index-global_context_size, :], logits=out))
+					correct_pred = tf.equal(tf.argmax(out, 1), tf.argmax(labels[:, pred_index-global_context_size, :], 1))
 					accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
-					self.losses+= loss
+					self.loss += loss
 					self.mean_acc += accuracy
 					if is_training is False:	self.outputs.append(tf.argmax(out, 1)[0])
 
 			self.final_state = self.state
 			self.mean_acc /= (bptt_steps*global_context_size)
-			self.losses /= (bptt_steps*global_context_size)
+			self.loss /= (bptt_steps*global_context_size)
