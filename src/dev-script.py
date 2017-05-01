@@ -24,10 +24,10 @@ batch_size = 1
 global_context_size = 100
 bptt_steps = 10
 n_epochs = 200
-
+t_model = model.sample_rnn(input, label, is_training=True)
 input = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps+global_context_size-1, 1])
 label = tf.placeholder(tf.uint8, [batch_size, global_context_size*bptt_steps, 16])
-t_model = model.sample_rnn(input, label, is_training=True)
+
 optimizer = tf.train.AdamOptimizer().minimize(t_model.loss)
 saver = tf.train.Saver()
 if not os.path.exists('./params'):	os.makedirs('./params')
@@ -49,9 +49,9 @@ with tf.Session() as sess:
 				end_ptr = (j+1)*global_context_size*bptt_steps + global_context_size - 1
 				bptt_batch_x = current_clip[:, start_ptr:end_ptr, :]
 				bptt_batch_y = labels[i][:, start_ptr+global_context_size:end_ptr+1, :]
-				bptt_batch_loss, np_state, op = sess.run([t_model.loss, t_model.final_state, optimizer], feed_dict={input:bptt_batch_x, label:bptt_batch_y, 
+				bptt_batch_loss, acc, np_state, op = sess.run([t_model.loss, t_model.mean_acc, t_model.final_state, optimizer], feed_dict={input:bptt_batch_x, label:bptt_batch_y, 
 														t_model.initial_state[0]:np_state[0], t_model.initial_state[1]:np_state[1]})
-				print 'loss at bptt index', j, ':', bptt_batch_loss	
+				print 'loss at bptt index', j, ':', bptt_batch_loss, ', accuracy:', acc
 			save_path = saver.save(sess, "./params/last_model.ckpt")
 			print("Model saved in file: %s\n" % save_path)
 	
