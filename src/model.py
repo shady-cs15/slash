@@ -16,18 +16,20 @@ import tensorflow as tf
 
 class sample_rnn():
     def __init__(self, inputs, labels, masks, bptt_steps=2, global_context_size=100, local_context_size=10, lstm_dim=100, sampl_dim=10,
-    	hid_dim1=80, hid_dim2=200, out_dim=16, batch_size=1, is_training=True):
+    	hid_dim1=80, hid_dim2=200, hid_dim3=500, out_dim=16, batch_size=1, is_training=True):
 
 		self.weights = {
 				'sampl': tf.Variable(tf.random_uniform([lstm_dim, sampl_dim]), name='sampl/W'),
 				'hidn1': tf.Variable(tf.random_uniform([sampl_dim+local_context_size, hid_dim1]), name='hidn1/W'),
 				'hidn2': tf.Variable(tf.random_uniform([hid_dim1, hid_dim2]), name='hidn2/W'),
-				'out': tf.Variable(tf.random_uniform([hid_dim2, out_dim]), name='out/W')
+				'hidn3': tf.Variable(tf.random_uniform([hid_dim2, hid_dim3]), name='hidn3/W'),
+				'out': tf.Variable(tf.random_uniform([hid_dim3, out_dim]), name='out/W')
 				}
 		self.biases = {
 				'sampl': tf.Variable(tf.random_uniform([sampl_dim]), name='sampl/b'),
 				'hidn1': tf.Variable(tf.random_uniform([hid_dim1]), name='hidn1/b'),
 				'hidn2': tf.Variable(tf.random_uniform([hid_dim2]), name='hidn2/b'),
+				'hidn3': tf.Variable(tf.random_uniform([hid_dim3]), name='hidn3/b'),
 				'out':	tf.Variable(tf.random_uniform([out_dim]), name='out/b')
 				}
 
@@ -59,7 +61,8 @@ class sample_rnn():
 					conc = tf.concat([down_sampl, local_context], axis=1)
 					hid1 = tf.nn.relu(tf.matmul(conc, self.weights['hidn1']) + self.biases['hidn1'])
 					hid2 = tf.nn.relu(tf.matmul(hid1, self.weights['hidn2']) + self.biases['hidn2'])
-					out = tf.matmul(hid2, self.weights['out']) + self.biases['out']
+					hid3 = tf.nn.relu(tf.matmul(hid2, self.weights['hidn3']) + self.biases['hidn3'])
+					out = tf.matmul(hid3, self.weights['out']) + self.biases['out']
 					out = tf.multiply(out, masks[:, pred_index - global_context_size])
 					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels[:, pred_index-global_context_size, :], logits=out))
 					#if i==0 and j==0:	self.o1 = out
