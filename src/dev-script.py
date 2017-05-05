@@ -12,7 +12,7 @@ import tensorflow as tf
 data_files = os.listdir('../data/')
 data = [np.load('../data/'+ data_file)	for data_file in data_files]
 inputs = []
-labels = []
+#labels = []
 
 '''
 for i in range(len(data)):
@@ -21,19 +21,22 @@ for i in range(len(data)):
 	inputs.append(data_x.reshape(1, data_x.shape[0], 1))
 	labels.append(data_y.reshape(1, data_y.shape[0], 16))
 '''
-inputs = [np.load('dummyX.npy')]
-labels = [np.load('dummyY.npy')]
-masks = [np.load('dummyM.npy')]
+inputs = [np.load('../tmp/godfather-1x.npy')]
+#labels = [np.load('dummyY.npy')]
+masks = [np.load('../tmp/godfather-1m.npy')]
 
 batch_size = 64
 global_context_size = 100
 bptt_steps = 2
 n_epochs = 100
 clip_iter = 20
+
 input = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps+global_context_size-1, 1])
-label = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps, 16])
-mask = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps, 1])
-t_model = model.sample_rnn(input, label, mask, batch_size=batch_size, is_training=False)
+tf_masks = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps, 1])
+tf_inputs = (input - 7.5)/3.75
+tf_outputs = tf.placeholder(tf.uint8, [batch_size, global_context_size*bptt_steps, 1])
+tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=16), [batch_size, global_context_size*bptt_steps, 16])
+t_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, batch_size=batch_size, is_training=False)
 
 optimizer = tf.train.AdamOptimizer(0.01)
 global_step = tf.Variable(0)
@@ -58,17 +61,21 @@ with tf.Session() as sess:
 				print 'Training on clip #', i, '/', len(inputs)
 				print 'Iteration:', ci
 				current_clip = inputs[i]
+				current_mask = masks[i]
 				n_bptt_batches = current_clip.shape[1] / (global_context_size * bptt_steps) - 1
 				np_state = z_state
 				for j in range(n_bptt_batches):
 					start_ptr = j*global_context_size*bptt_steps
 					end_ptr = (j+1)*global_context_size*bptt_steps + global_context_size - 1
 					bptt_batch_x = current_clip[:, start_ptr:end_ptr, :]
-					bptt_batch_y = labels[i][:, start_ptr+global_context_size:end_ptr+1, :]
-					bptt_batch_m = masks[i][:, start_ptr+global_context_size:end_ptr+1, :]
+					bptt_batch_y = current_clip[:, start_ptr+global_context_size:end_ptr+1, :]
+					bptt_batch_m = current_mask[:, start_ptr+global_context_size:end_ptr+1, :]
 					bptt_batch_loss, acc, np_state, op, out = \
 						sess.run([t_model.loss, t_model.mean_acc, t_model.final_state, optimizer, t_model.outputs],
-							feed_dict={input:bptt_batch_x, label:bptt_batch_y, mask:bptt_batch_m,
+							feed_dict={
+								input: bptt_batch_x,
+								tf_outputs: bptt_batch_y,
+								tf_masks: bptt_batch_m,
 								t_model.initial_state[0]:np_state[0], t_model.initial_state[1]:np_state[1]})
 					print 'clipiter:', ci,', bptt index:', j, ':, loss:', bptt_batch_loss, ', accuracy:', acc*100., '%'
 					print 'memory activations: ', 100. - ((np_state[0]<0).sum() + (np_state[1]<0).sum())/128., '%' #remove

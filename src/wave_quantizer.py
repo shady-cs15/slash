@@ -27,6 +27,7 @@ for i in range(len(wave_files)):
     bar.numerator = i+1
     clip_name = wave_files[i][:-4]
     q_wave = du.load_file('../waves/'+wave_files[i])
-    np.save('../data/'+clip_name+'.npy', q_wave)
+    length = (q_wave.shape[0]/int(1e4))*int(1e4)
+    np.save('../data/'+clip_name+'.npy', q_wave[:length])
     print '\033[Ffiles processed:', bar
 print 'quantized waves stored in ../data/ '
