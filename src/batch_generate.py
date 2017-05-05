@@ -1,10 +1,11 @@
 import os
 import numpy as np
 from etaprogress.progress import ProgressBar as pgb
+import sys
 
 #===============================================================================
 # Pre processing script for batch generation
-# Reads quantized raw waves from ../data/*.npy files
+# Reads quantized quantized waves from ../data/*.npy files
 # Generates batches and masks
 # Stores them in ../tmp/*_x.npy and ../tmp/*_m.npy
 #===============================================================================
@@ -13,6 +14,7 @@ if os.path.exists('../data/'):
 	data_files = os.listdir('../data/')
 else:
 	print 'ERROR: data directory not found!'
+	sys.exit(1)
 
 if not os.path.exists('../tmp/'):
 	os.makedirs('../tmp/')

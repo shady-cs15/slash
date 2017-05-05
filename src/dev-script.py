@@ -32,7 +32,7 @@ n_epochs = 100
 clip_iter = 20
 input = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps+global_context_size-1, 1])
 label = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps, 16])
-mask = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps, 16])
+mask = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps, 1])
 t_model = model.sample_rnn(input, label, mask, batch_size=batch_size, is_training=False)
 
 optimizer = tf.train.AdamOptimizer(0.01)
