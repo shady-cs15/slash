@@ -9,6 +9,7 @@ import tensorflow as tf
 	sampl_dim: dimension of down sampling layer; default = 10
 	hid_dim1: dimension of 1st hidden layer; default = 80
 	hid_dim2: dimension of 2nd hidden layer; default = 200
+	hid_dim3: dimension of 3rd hidden layer; default = 500
 	out_dim : dimension of softmax layer; default = 16
 	inputs is of shape: batch_size x (bptt_steps x global_context_size) x 1
 	labels is of shape: batch_size x (bptt_steps x global_context_size) x 16
@@ -41,6 +42,7 @@ class sample_rnn():
 		self.loss = 0.
 		count = 0
 
+		print 'Building computation graph ..'
 		with tf.variable_scope('RNN') as scope:
 			for i in range(bptt_steps):
 				if i>0:	scope.reuse_variables()
@@ -53,7 +55,7 @@ class sample_rnn():
 				down_sampl = down_sampl/10.
 
 				#if i==0:	self.o1, self.o2 = lstm_output, down_sampl # remove
-				print i
+				print 'Graph built:', i*100./bptt_steps, '%'
 				for j in range(global_context_size):
 					pred_index = (i+1)*global_context_size + j
 					local_context =  inputs[:, pred_index-local_context_size:pred_index, :]
@@ -73,6 +75,7 @@ class sample_rnn():
 					self.mean_acc += mean_acc
 					if is_training is False:	self.outputs.append(tf.argmax(out, 1))
 
+			print 'Graph built:', 100.0, '%'
 			self.final_state = self.state
 			self.mean_acc /= (bptt_steps*global_context_size)
 			self.loss /= count
