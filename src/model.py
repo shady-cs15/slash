@@ -50,7 +50,7 @@ class sample_rnn():
 				lstm_output, self.state = lstm_cell(global_context, self.state)
 				lstm_output = tf.nn.relu(lstm_output)
 				down_sampl = (tf.matmul(lstm_output, self.weights['sampl']) + self.biases['sampl'])
-				down_sampl = down_sampl/10.#tf.reduce_sum(tf.abs(down_sampl), axis=1)
+				down_sampl = down_sampl/10.
 
 				#if i==0:	self.o1, self.o2 = lstm_output, down_sampl # remove
 				print i
@@ -65,8 +65,6 @@ class sample_rnn():
 					out = tf.matmul(hid3, self.weights['out']) + self.biases['out']
 					out = tf.multiply(out, masks[:, pred_index - global_context_size])
 					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels[:, pred_index-global_context_size, :], logits=out))
-					#if i==0 and j==0:	self.o1 = out
-					#loss = tf.multiply(loss, masks[:, pred_index-global_context_size])
 					correct_pred = tf.equal(tf.argmax(out, 1), tf.argmax(labels[:, pred_index - global_context_size, :], 1))
 					accuracy = tf.reduce_sum(tf.cast(correct_pred, tf.float32)) - (batch_size - tf.reduce_sum(masks[:, pred_index-global_context_size, 0]))
 					mean_acc = accuracy/tf.reduce_sum(masks[:, pred_index-global_context_size, 0])
@@ -77,4 +75,4 @@ class sample_rnn():
 
 			self.final_state = self.state
 			self.mean_acc /= (bptt_steps*global_context_size)
-			self.loss /= count#(bptt_steps*global_context_size)
+			self.loss /= count

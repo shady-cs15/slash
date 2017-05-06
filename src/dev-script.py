@@ -3,26 +3,12 @@ import numpy as np
 import model
 import tensorflow as tf
 
-'''
-	Normalise inputs and labels
-	from .npy files, inputs[i] = ith clip
-	labels[i] = one hot encoding of ith clip
-'''
 
 data_files = os.listdir('../data/')
 data = [np.load('../data/'+ data_file)	for data_file in data_files]
 inputs = []
-#labels = []
 
-'''
-for i in range(len(data)):
-	data_x = (data[i] - 7.5) / 3.75
-	data_y = np.eye(16)[data[i]]
-	inputs.append(data_x.reshape(1, data_x.shape[0], 1))
-	labels.append(data_y.reshape(1, data_y.shape[0], 16))
-'''
 inputs = [np.load('../tmp/godfather-1x.npy')]
-#labels = [np.load('dummyY.npy')]
 masks = [np.load('../tmp/godfather-1m.npy')]
 
 batch_size = 64
@@ -80,9 +66,7 @@ with tf.Session() as sess:
 					print 'clipiter:', ci,', bptt index:', j, ':, loss:', bptt_batch_loss, ', accuracy:', acc*100., '%'
 					print 'memory activations: ', 100. - ((np_state[0]<0).sum() + (np_state[1]<0).sum())/128., '%' #remove
 					print 'out bincount:', np.bincount(np.array(out).flatten()) # remove
-					#print out
-					#print 'inp bincount:', np.bincount(np.array(bptt_batch_x.flatten()*3.75+7.5, dtype='uint8'))
-					#print p1.shape # remove
+					#print p1 # remove
 					#print p2 # remove
 				save_path = saver.save(sess, "./params/last_model.ckpt")
 				print("Model saved in file: %s\n" % save_path)
