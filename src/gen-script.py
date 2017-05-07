@@ -2,40 +2,45 @@ import os
 import numpy as np
 import model
 import tensorflow as tf
+import data_utils as du
 
-inp1_x = np.load('../data/gf1.npy')[:20000]
-inp1_y = np.eye(16)[inp1_x]
-inp1_x = ((inp1_x - 7.5)/7.5).reshape(1, 20000, 1)
-inp1_y = inp1_y.reshape(1, 20000, 16)
-
-inp2_x = np.load('../data/gf5.npy')[:20000]
-inp2_y = np.eye(16)[inp2_x]
-inp2_x = ((inp2_x - 7.5)/7.5).reshape(1, 20000, 1)
-inp2_y = inp2_y.reshape(1, 20000, 16)
-
-print inp1_x, inp1_y
-print inp2_x, inp2_y
-
-
+inp_x = np.load('../tmp/godfather-6x.npy')[0][:50000].reshape(1, 50000, 1)
+inp_m = np.load('../tmp/godfather-6m.npy')[0][:50000].reshape(1, 50000, 1)
 global_context_size = 100
-input = tf.placeholder(tf.float32, [1, 2*global_context_size-1, 1])
-label = tf.placeholder(tf.uint8, [1, global_context_size, 16])
-g_model = model.sample_rnn(input, label, bptt_steps=1, is_training=False)
+batch_size = 1
+input = tf.placeholder(tf.float32, [batch_size, (global_context_size*2)-1, 1])
+tf_inputs = (input - 7.5)/3.75
+tf_outputs = tf.placeholder(tf.uint8, [batch_size, global_context_size, 1])
+tf_masks = tf.placeholder(tf.float32, [batch_size, global_context_size, 1])
+tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=16), [batch_size, global_context_size, 16])
+g_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, bptt_steps=1, batch_size=1, is_training=False)
+
 saver = tf.train.Saver()
-seed_x = inp1_x
-seed_y = inp1_y
 
 with tf.Session() as sess:
 	saver.restore(sess, './params/last_model.ckpt')
 	print 'model restored..'
 	np_state = (g_model.initial_state[0].eval(), g_model.initial_state[1].eval())
+	predictions = []
 
 	# prediction phase
-	n_pred_batches = 20000/global_context_size - 1
+	n_pred_batches = 50000/global_context_size - 1
 	for i in range(n_pred_batches):
-		cur_input = seed_x[:, i*global_context_size:(i+2)*global_context_size-1, :]
-		cur_label = seed_y[:, (i+1)*global_context_size:(i+2)*global_context_size, :]
-		loss, acc, np_state, out = sess.run([g_model.loss, g_model.mean_acc, g_model.final_state, g_model.outputs], 
-			feed_dict={input:cur_input, label:cur_label, g_model.initial_state[0]:np_state[0], g_model.initial_state[1]:np_state[1]})
+		cur_input = inp_x[:, i*global_context_size:(i+2)*global_context_size-1, :]
+		cur_label = inp_x[:, (i+1)*global_context_size:(i+2)*global_context_size, :]
+		cur_mask = inp_m[:, (i+1)*global_context_size:(i+2)*global_context_size, :]
+		loss, acc, np_state, out = sess.run([g_model.loss, g_model.mean_acc, g_model.final_state, g_model.outputs],
+			feed_dict = {
+				input:cur_input,
+				tf_outputs:cur_label,
+				tf_masks:cur_mask,
+				g_model.initial_state[0]:np_state[0],
+				g_model.initial_state[1]:np_state[1]}
+			)
 		print 'index:', i, 'loss:', loss, 'accuracy:', acc
-		print out
+		predictions += list(np.array(out).flatten())
+
+	# generation phase
+	for i in range(n_pred_batches):
+		pass
+	du.save_file('out.wav', np.array(predictions))

@@ -3,11 +3,6 @@ import numpy as np
 import model
 import tensorflow as tf
 
-
-data_files = os.listdir('../data/')
-data = [np.load('../data/'+ data_file)	for data_file in data_files]
-inputs = []
-
 inputs = [np.load('../tmp/godfather-1x.npy')]
 masks = [np.load('../tmp/godfather-1m.npy')]
 
@@ -31,7 +26,6 @@ gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
 optimizer = optimizer.apply_gradients(zip(gradients, v), global_step=global_step)
 saver = tf.train.Saver()
 if not os.path.exists('./params'):	os.makedirs('./params')
-
 
 with tf.Session() as sess:
 	sess.run(tf.global_variables_initializer())
