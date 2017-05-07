@@ -56,7 +56,10 @@ with tf.Session() as sess:
 								input: bptt_batch_x,
 								tf_outputs: bptt_batch_y,
 								tf_masks: bptt_batch_m,
-								t_model.initial_state[0]:np_state[0], t_model.initial_state[1]:np_state[1]})
+								t_model.initial_state[0]:np_state[0],
+								t_model.initial_state[1]:np_state[1],
+								t_model.generation_phase:False
+							})
 					print 'clipiter:', ci,', bptt index:', j, ':, loss:', bptt_batch_loss, ', accuracy:', acc*100., '%'
 					print 'memory activations: ', 100. - ((np_state[0]<0).sum() + (np_state[1]<0).sum())/128., '%' #remove
 					print 'out bincount:', np.bincount(np.array(out).flatten()) # remove

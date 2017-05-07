@@ -24,7 +24,7 @@ with tf.Session() as sess:
 	predictions = []
 
 	# prediction phase
-	n_pred_batches = 50000/global_context_size - 1
+	n_pred_batches = 20000/global_context_size - 1
 	for i in range(n_pred_batches):
 		cur_input = inp_x[:, i*global_context_size:(i+2)*global_context_size-1, :]
 		cur_label = inp_x[:, (i+1)*global_context_size:(i+2)*global_context_size, :]
@@ -35,12 +35,26 @@ with tf.Session() as sess:
 				tf_outputs:cur_label,
 				tf_masks:cur_mask,
 				g_model.initial_state[0]:np_state[0],
-				g_model.initial_state[1]:np_state[1]}
-			)
+				g_model.initial_state[1]:np_state[1],
+				g_model.generation_phase:False
+			})
 		print 'index:', i, 'loss:', loss, 'accuracy:', acc
 		predictions += list(np.array(out).flatten())
 
+
 	# generation phase
-	for i in range(n_pred_batches):
-		pass
+	for i in range(100):
+		cur_input = np.array(np.concatenate([predictions[-global_context_size:], np.zeros([global_context_size-1])])).reshape([1, 2*global_context_size-1, 1])
+		np_state, out = sess.run([g_model.final_state, g_model.outputs],
+			feed_dict = {
+				input:cur_input,
+				tf_outputs:cur_label,
+				tf_masks:cur_mask,
+				g_model.initial_state[0]:np_state[0],
+				g_model.initial_state[1]:np_state[1],
+				g_model.generation_phase:True
+			})
+		print np.array(out).flatten()
+		predictions += list(np.array(out, dtype=np.uint8).flatten())
+		
 	du.save_file('out.wav', np.array(predictions))

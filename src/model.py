@@ -41,6 +41,8 @@ class sample_rnn():
 		self.outputs = []
 		self.loss = 0.
 		count = 0
+		self.generation_phase = tf.placeholder(tf.bool)
+		inputs = tf.cond(self.generation_phase, lambda:inputs[:,:global_context_size,:], lambda:inputs)
 
 		print 'Building computation graph ..'
 		with tf.variable_scope('RNN') as scope:
@@ -52,7 +54,6 @@ class sample_rnn():
 				lstm_output, self.state = lstm_cell(global_context, self.state)
 				lstm_output = tf.nn.relu(lstm_output)
 				down_sampl = (tf.matmul(lstm_output, self.weights['sampl']) + self.biases['sampl'])
-				down_sampl = down_sampl/10.
 
 				#if i==0:	self.o1, self.o2 = lstm_output, down_sampl # remove
 				print 'Graph built:', i*100./bptt_steps, '%'
@@ -74,6 +75,9 @@ class sample_rnn():
 					count+= tf.reduce_mean(masks[:, pred_index - global_context_size, 0])
 					self.mean_acc += mean_acc
 					if is_training is False:	self.outputs.append(tf.argmax(out, 1))
+					last_pred = (tf.cast(tf.argmax(out,1),tf.float32)-7.5)/3.75
+					last_pred = tf.reshape(last_pred, [1, 1, 1])
+					inputs = tf.cond(self.generation_phase, lambda: tf.concat([inputs, last_pred], axis=1), lambda: inputs)
 
 			print 'Graph built:', 100.0, '%'
 			self.final_state = self.state
