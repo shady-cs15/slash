@@ -54,7 +54,7 @@ with tf.Session() as sess:
 				g_model.initial_state[1]:np_state[1],
 				g_model.generation_phase:True
 			})
-		print np.array(out).flatten()
+		print np.array(predictions[-global_context_size:]), np.array(out).flatten()
 		predictions += list(np.array(out, dtype=np.uint8).flatten())
-		
+
 	du.save_file('out.wav', np.array(predictions))

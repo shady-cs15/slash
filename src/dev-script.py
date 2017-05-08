@@ -51,7 +51,7 @@ with tf.Session() as sess:
 					bptt_batch_y = current_clip[:, start_ptr+global_context_size:end_ptr+1, :]
 					bptt_batch_m = current_mask[:, start_ptr+global_context_size:end_ptr+1, :]
 					bptt_batch_loss, acc, np_state, op, out = \
-						sess.run([t_model.loss, t_model.mean_acc, t_model.final_state, optimizer, t_model.outputs],
+						sess.run([t_model.loss, t_model.mean_acc, t_model.final_state, optimizer, t_model.output],
 							feed_dict={
 								input: bptt_batch_x,
 								tf_outputs: bptt_batch_y,

@@ -52,10 +52,10 @@ class sample_rnn():
 				global_context = inputs[:, i*global_context_size:(i+1)*global_context_size, :]
 				global_context = tf.reshape(global_context, [batch_size, global_context_size])
 				lstm_output, self.state = lstm_cell(global_context, self.state)
-				lstm_output = tf.nn.relu(lstm_output)
-				down_sampl = (tf.matmul(lstm_output, self.weights['sampl']) + self.biases['sampl'])
+				down_sampl = (tf.matmul(lstm_output, self.weights['sampl']) + self.biases['sampl'])/20.
+				#down_sampl = tf.zeros([batch_size, 10])
 
-				#if i==0:	self.o1, self.o2 = lstm_output, down_sampl # remove
+				if i==0:	self.o1, self.o2 = lstm_output, down_sampl # remove
 				print 'Graph built:', i*100./bptt_steps, '%'
 				for j in range(global_context_size):
 					pred_index = (i+1)*global_context_size + j
@@ -74,8 +74,10 @@ class sample_rnn():
 					self.loss += loss
 					count+= tf.reduce_mean(masks[:, pred_index - global_context_size, 0])
 					self.mean_acc += mean_acc
-					if is_training is False:	self.outputs.append(tf.argmax(out, 1))
-					last_pred = (tf.cast(tf.argmax(out,1),tf.float32)-7.5)/3.75
+					# sampling
+					sample = tf.multinomial(tf.log(tf.nn.softmax(out)), 1)
+					if is_training is False:	self.outputs.append(sample)
+					last_pred = (tf.cast(sample, tf.float32) - 7.5)/3.75
 					last_pred = tf.reshape(last_pred, [1, 1, 1])
 					inputs = tf.cond(self.generation_phase, lambda: tf.concat([inputs, last_pred], axis=1), lambda: inputs)
 
