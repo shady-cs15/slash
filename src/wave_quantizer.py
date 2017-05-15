@@ -23,11 +23,13 @@ if not os.path.exists('../data/'):
 bar = pgb(len(wave_files), max_width=50)
 print 'starting processing..'
 
+max_len = int(5e4)
 for i in range(len(wave_files)):
     bar.numerator = i+1
     clip_name = wave_files[i][:-4]
     q_wave = du.load_file('../waves/'+wave_files[i])
-    length = (q_wave.shape[0]/int(1e4))*int(1e4)
-    np.save('../data/'+clip_name+'.npy', q_wave[:length])
+    length = (q_wave.shape[0]/max_len)*max_len
+    for j in range(length/max_len):
+        np.save('../data/'+clip_name+'_'+str(j)+'.npy', q_wave[j*max_len:(j+1)*max_len])
     print '\033[Ffiles processed:', bar
 print 'quantized waves stored in ../data/ '
