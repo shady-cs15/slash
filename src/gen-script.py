@@ -4,8 +4,16 @@ import model
 import tensorflow as tf
 import data_utils as du
 
-inp_x = np.load('../tmp/godfather-6x.npy')[0][:50000].reshape(1, 50000, 1)
-inp_m = np.load('../tmp/godfather-6m.npy')[0][:50000].reshape(1, 50000, 1)
+
+files = os.listdir('../tmp/')
+files = [(('../tmp/'+files[i+1]), ('../tmp/'+files[i]))  for i in range(0, len(files), 2)]
+random.seed(0)
+random.shuffle(files)
+val_list = files[-5:]
+
+inp_x = np.load(val_list[0][0])[0].reshape(1, 50000, 1)
+inp_m = np.load(val_list[0][1])[0].reshape(1, 50000, 1)
+
 global_context_size = 100
 batch_size = 1
 input = tf.placeholder(tf.float32, [batch_size, (global_context_size*2)-1, 1])
@@ -29,7 +37,7 @@ with tf.Session() as sess:
 		cur_input = inp_x[:, i*global_context_size:(i+2)*global_context_size-1, :]
 		cur_label = inp_x[:, (i+1)*global_context_size:(i+2)*global_context_size, :]
 		cur_mask = inp_m[:, (i+1)*global_context_size:(i+2)*global_context_size, :]
-		loss, acc, np_state, out = sess.run([g_model.loss, g_model.mean_acc, g_model.final_state, g_model.outputs],
+		loss, np_state, out = sess.run([g_model.loss, g_model.final_state, g_model.outputs],
 			feed_dict = {
 				input:cur_input,
 				tf_outputs:cur_label,
@@ -38,12 +46,12 @@ with tf.Session() as sess:
 				g_model.initial_state[1]:np_state[1],
 				g_model.generation_phase:False
 			})
-		print 'index:', i, 'loss:', loss, 'accuracy:', acc
+		print 'index:', i, 'loss:', loss
 		predictions += list(np.array(out).flatten())
 
 
 	# generation phase
-	for i in range(100):
+	for i in range(500):
 		cur_input = np.array(np.concatenate([predictions[-global_context_size:], np.zeros([global_context_size-1])])).reshape([1, 2*global_context_size-1, 1])
 		np_state, out = sess.run([g_model.final_state, g_model.outputs],
 			feed_dict = {
@@ -54,7 +62,7 @@ with tf.Session() as sess:
 				g_model.initial_state[1]:np_state[1],
 				g_model.generation_phase:True
 			})
-		print np.array(predictions[-global_context_size:]), np.array(out).flatten()
+		#print np.array(predictions[-global_context_size:]), np.array(out).flatten()
 		predictions += list(np.array(out, dtype=np.uint8).flatten())
 
 	du.save_file('out.wav', np.array(predictions))

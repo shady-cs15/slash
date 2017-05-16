@@ -40,6 +40,7 @@ class sample_rnn():
 		self.mean_acc = 0.
 		self.outputs = []
 		self.loss = 0.
+		self.perplexity = 0.
 		count = 0
 		self.generation_phase = tf.placeholder(tf.bool)
 		inputs = tf.cond(self.generation_phase, lambda:inputs[:,:global_context_size,:], lambda:inputs)
@@ -67,21 +68,22 @@ class sample_rnn():
 					hid3 = tf.nn.relu(tf.matmul(hid2, self.weights['hidn3']) + self.biases['hidn3'])
 					out = tf.matmul(hid3, self.weights['out']) + self.biases['out']
 					out = tf.multiply(out, masks[:, pred_index - global_context_size])
+
+					# loss
+					prediction = tf.minimum(tf.nn.softmax(out), 1e-10)
+					label = labels[:, pred_index-global_context_size, :]
 					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels[:, pred_index-global_context_size, :], logits=out))
-					correct_pred = tf.equal(tf.argmax(out, 1), tf.argmax(labels[:, pred_index - global_context_size, :], 1))
-					accuracy = tf.reduce_sum(tf.cast(correct_pred, tf.float32)) - (batch_size - tf.reduce_sum(masks[:, pred_index-global_context_size, 0]))
-					mean_acc = accuracy/tf.reduce_sum(masks[:, pred_index-global_context_size, 0])
 					self.loss += loss
-					count+= tf.reduce_mean(masks[:, pred_index - global_context_size, 0])
-					self.mean_acc += mean_acc
+					count += tf.reduce_mean(masks[:, pred_index - global_context_size, 0])
+
 					# sampling
 					sample = tf.multinomial(tf.log(tf.nn.softmax(out)), 1)
-					if is_training is False:	self.outputs.append(sample)
-					last_pred = (tf.cast(sample, tf.float32) - 7.5)/3.75
-					last_pred = tf.reshape(last_pred, [1, 1, 1])
-					inputs = tf.cond(self.generation_phase, lambda: tf.concat([inputs, last_pred], axis=1), lambda: inputs)
+					self.outputs.append(sample)
+					if is_training is False:
+						last_pred = (tf.cast(sample, tf.float32) - 7.5)/3.75
+						last_pred = tf.reshape(last_pred, [1, 1, 1])
+						inputs = tf.cond(self.generation_phase, lambda: tf.concat([inputs, last_pred], axis=1), lambda: inputs)
 
 			print 'Graph built:', 100.0, '%'
 			self.final_state = self.state
-			self.mean_acc /= (bptt_steps*global_context_size)
 			self.loss /= count
