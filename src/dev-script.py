@@ -1,3 +1,7 @@
+# floyd-hub version
+# floyd run --env tensorflow-1.0:py2 --gpu --data xomsYTSqiGYXDHgfkXgcuT:data --data FRnZaYS2MP7worpa5iQh6P:params "python dev-script.py"
+
+
 import os
 import numpy as np
 import model
@@ -7,9 +11,10 @@ import json
 
 # load training and validation data
 # data is randomly shuffled
-files = os.listdir('../tmp/')
-files = [(('../tmp/'+files[i+1]), ('../tmp/'+files[i]))  for i in range(0, len(files), 2)]
-random.seed(0)
+files = os.listdir('/data/')
+if ('.floyddata' in files):	files.remove('.floyddata')
+files = [(('/data/'+files[i+1]), ('/data/'+files[i]))  for i in range(0, len(files), 2)]
+random.seed(3)
 random.shuffle(files)
 inputs = [np.load(files[i][0]) for i in range(len(files)-5)]
 masks = [np.load(files[i][1]) for i in range(len(files)-5)]
@@ -34,7 +39,7 @@ tf_masks = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_step
 tf_inputs = (input - 7.5)/3.75
 tf_outputs = tf.placeholder(tf.uint8, [batch_size, global_context_size*bptt_steps, 1])
 tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=16), [batch_size, global_context_size*bptt_steps, 16])
-t_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, batch_size=batch_size, is_training=True)
+t_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, bptt_steps=bptt_steps, batch_size=batch_size, is_training=True)
 
 # gradient clipping
 # to prevent gradient explosion
@@ -44,17 +49,17 @@ gradients, v = zip(*optimizer.compute_gradients(t_model.loss))
 gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
 optimizer = optimizer.apply_gradients(zip(gradients, v), global_step=global_step)
 saver = tf.train.Saver()
-if not os.path.exists('../params'):	os.makedirs('../params')
-if not os.path.exists('../gen'):	os.makedirs('../gen')
-if not os.path.exists('../logs'):	os.makedirs('../logs')
+if not os.path.exists('/output'):	os.makedirs('/output')
+#if not os.path.exists('../gen'):	os.makedirs('../gen')
+#if not os.path.exists('../logs'):	os.makedirs('../logs')
 
 
 # entry point function for
 # generator thread, runs gen-script.py
 # and saves generated output in ./gen/*.wav
 # * = <train/test>_<iter>
-def generator(out_file, in_file, mask_file):
-	os.system('python gen-script.py '+out_file+' '+in_file+' '+mask_file)
+#def generator(out_file, in_file, mask_file):
+#	os.system('python gen-script.py '+out_file+' '+in_file+' '+mask_file)
 
 
 # functions to dump and load state of the network
@@ -62,7 +67,7 @@ def generator(out_file, in_file, mask_file):
 # 1. best_val_loss, 2. iter_, 3. ep, 4. i
 # states are dumped into ../logs/state.log
 def dump_state(loss, iter, epoch, clip):
-	file_name = '../logs/state.log'
+	file_name = '/output/state.log'
 	dict_ = {
 		'loss': loss,
 		'iter': iter,
@@ -76,7 +81,7 @@ def dump_state(loss, iter, epoch, clip):
 
 def load_state():
 	global best_val_loss, iter_, start_ep, start_clip, inputs
-	file_name = '../logs/state.log'
+	file_name = '/params/state.log'
 	file = open(file_name, 'r')
 	json_ = file.read()
 	file.close()
@@ -98,11 +103,11 @@ with tf.Session() as sess:
 
 	# load state of training
 	# and parameters of the neural network
-	if os.path.exists('../params/last_model.ckpt.meta'):
-		saver.restore(sess, '../params/last_model.ckpt')
+	if os.path.exists('/params/last_model.ckpt.meta'):
+		saver.restore(sess, '/params/last_model.ckpt')
 		print 'model restored from last checkpoint ..'
 	z_state = (t_model.initial_state[0].eval(), t_model.initial_state[1].eval())
-	if os.path.exists('../logs/state.log'):
+	if os.path.exists('/params/state.log'):
 		load_state()
 		print 'network state restored from last saved instance ..'
 
@@ -166,23 +171,25 @@ with tf.Session() as sess:
 				print '\033[Fminibatch ({}/{}), validation loss : {:.4f}'.format(k+1, n_bptt_batches, bptt_batch_loss)
 			cur_val_loss = np.mean(val_losses)
 			print 'mean validation loss:', cur_val_loss
-			if cur_val_loss<best_val_loss:
+			if cur_val_loss<=best_val_loss:
 				print 'validation loss improved! {:.4f}->{:.4f}'.format(best_val_loss, cur_val_loss)
 				best_val_loss = cur_val_loss
-				save_path = saver.save(sess, "../params/last_model.ckpt")
+				save_path = saver.save(sess, "/output/best_model.ckpt")
 				print("Model saved in file: %s" % save_path)
 			else:
 				print 'validation loss did not improve.'
+				save_path = saver.save(sess, "/output/last_model.ckpt")
+				print("Model saved in file: %s" % save_path)
 			dump_state(float(best_val_loss), iter_, ep, i)
-			print 'state dumped at ../logs/state.log ..\n'
+			print 'state dumped at /output/state.log ..\n'
 
 
 			# generate some audio after Training
 			# on every 10 audio clips, 1 ep = 175 clips
 			# approximately 17 outputs per epoch
 			# 170 outputs in total for each seed
-			if i%generation_freq==0:
-				print '='*80
-				print 'Generating sample audio ..'
-				generator('train_'+str(i/generation_freq)+'.wav', files[0][0], files[0][1])
-				print '='*80
+			#if i%generation_freq==0:
+			#	print '='*80
+			#	print 'Generating sample audio ..'
+			#	generator('train_'+str(i/generation_freq)+'.wav', files[0][0], files[0][1])
+			#	print '='*80
