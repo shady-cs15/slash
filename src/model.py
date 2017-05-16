@@ -56,7 +56,7 @@ class sample_rnn():
 				down_sampl = (tf.matmul(lstm_output, self.weights['sampl']) + self.biases['sampl'])/20.
 				#down_sampl = tf.zeros([batch_size, 10])
 
-				if i==0:	self.o1, self.o2 = lstm_output, down_sampl # remove
+				#if i==0:	self.o1, self.o2 = lstm_output, down_sampl # remove
 				print 'Graph built:', i*100./bptt_steps, '%'
 				for j in range(global_context_size):
 					pred_index = (i+1)*global_context_size + j
