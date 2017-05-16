@@ -19,7 +19,7 @@ vmasks = [np.load(files[i][1]) for i in range(len(files)-5, len(files))]
 # network configurations
 batch_size = 64
 global_context_size = 100
-bptt_steps = 2
+bptt_steps = 10
 n_epochs = 200
 clip_iter = 1
 best_val_loss = np.inf
@@ -116,7 +116,7 @@ with tf.Session() as sess:
 				current_mask = masks[i]
 				n_bptt_batches = current_clip.shape[1] / (global_context_size * bptt_steps) - 1
 				np_state = z_state
-				for j in range(10):#n_bptt_batches):
+				for j in range(n_bptt_batches):
 					start_ptr = j*global_context_size*bptt_steps
 					end_ptr = (j+1)*global_context_size*bptt_steps + global_context_size - 1
 					bptt_batch_x = current_clip[:, start_ptr:end_ptr, :]
