@@ -13,7 +13,7 @@ inp_m = np.load(sys.argv[3])[0].reshape(1, 50000, 1)
 global_context_size = 100
 batch_size = 1
 input = tf.placeholder(tf.float32, [batch_size, (global_context_size*2)-1, 1])
-tf_inputs = (input - 7.5)/3.75
+tf_inputs = (input - 7.5)/7.5
 tf_outputs = tf.placeholder(tf.uint8, [batch_size, global_context_size, 1])
 tf_masks = tf.placeholder(tf.float32, [batch_size, global_context_size, 1])
 tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=16), [batch_size, global_context_size, 16])
@@ -22,7 +22,7 @@ if not os.path.exists('../gen'):	os.makedirs('../gen')
 saver = tf.train.Saver()
 
 with tf.Session() as sess:
-	saver.restore(sess, '../params/last_model.ckpt')
+	saver.restore(sess, '../params/best_model.ckpt')
 	print 'model restored..'
 	np_state = (g_model.initial_state[0].eval(), g_model.initial_state[1].eval())
 	predictions = []
