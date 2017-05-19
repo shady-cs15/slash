@@ -58,12 +58,12 @@ class sample_rnn():
 				global_context = inputs[:, i*global_context_size:(i+1)*global_context_size, :]
 				global_context = tf.reshape(global_context, [batch_size, global_context_size])
 				lstm_output, self.state = lstm_cell(global_context, self.state)
-				down_sampl = tf.nn.tanh(tf.matmul(lstm_output, self.weights['sampl']))#/sampl_dim)
+				down_sampl = tf.nn.tanh(tf.matmul(lstm_output, self.weights['sampl']) + self.biases['sampl'])#/sampl_dim)
 				#down_sampl = down_sampl/tf.reduce_max(down_sampl)
 				#down_sampl = (down_sampl - tf.reduce_min(down_sampl))/(tf.reduce_max(down_sampl)-tf.reduce_min(down_sampl))
 				#down_sampl = tf.zeros([batch_size, 10])
 
-				if i==0:	self.o1, self.o2 = lstm_output, down_sampl  # remove
+				#if i==0:	self.o1, self.o2 = lstm_output, down_sampl  # remove
 				print 'Graph built:', i*100./bptt_steps, '%'
 				for j in range(global_context_size):
 					pred_index = (i+1)*global_context_size + j
@@ -77,16 +77,15 @@ class sample_rnn():
 					out = tf.multiply(out, masks[:, pred_index - global_context_size])
 
 					# loss
-					#prediction = tf.minimum(tf.nn.softmax(out), 1e-10)
 					label = labels[:, pred_index-global_context_size, :]
 					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels[:, pred_index-global_context_size, :], logits=out))
 					self.loss += loss
 					count += tf.reduce_mean(masks[:, pred_index - global_context_size, 0])
 
 					# sampling
-					sample = tf.multinomial(tf.log(tf.nn.softmax(out)), 1)
-					self.outputs.append(tf.argmax(out, 1))#(sample)
 					if is_training is False:
+						sample = tf.multinomial(tf.log(tf.nn.softmax(out)), 1)
+						self.outputs.append(tf.argmax(out, 1))#sample)
 						last_pred = (tf.cast(sample, tf.float32) -7.5)/7.5
 						last_pred = tf.reshape(last_pred, [1, 1, 1])
 						inputs = tf.cond(self.generation_phase, lambda: tf.concat([inputs, last_pred], axis=1), lambda: inputs)

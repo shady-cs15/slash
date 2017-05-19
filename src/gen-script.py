@@ -7,8 +7,10 @@ import random
 import sys
 
 out_file = sys.argv[1]
-inp_x = np.load(sys.argv[2])[0].reshape(1, 50000, 1)
-inp_m = np.load(sys.argv[3])[0].reshape(1, 50000, 1)
+gen_indx = int(sys.argv[2])
+data = np.load('../tmp/data.npy')[gen_indx].reshape(1, 2, 80000)
+inp_x = data[:, 0, :].reshape(1, int(8e4), 1)
+inp_m = data[:, 1, :].reshape(1, int(8e4), 1)
 
 global_context_size = 100
 batch_size = 1
@@ -28,7 +30,8 @@ with tf.Session() as sess:
 	predictions = []
 
 	# prediction phase
-	n_pred_batches = 20000/global_context_size - 1
+	print 'Warming up rnn ..\n'
+	n_pred_batches = 50000/global_context_size - 1
 	for i in range(n_pred_batches):
 		cur_input = inp_x[:, i*global_context_size:(i+2)*global_context_size-1, :]
 		cur_label = inp_x[:, (i+1)*global_context_size:(i+2)*global_context_size, :]
@@ -47,7 +50,9 @@ with tf.Session() as sess:
 
 
 	# generation phase
-	for i in range(500):
+	gen_len = 5
+	print 'Generating the next', gen_len, 'seconds ..'
+	for i in range(100*gen_len):
 		cur_input = np.array(np.concatenate([predictions[-global_context_size:], np.zeros([global_context_size-1])])).reshape([1, 2*global_context_size-1, 1])
 		np_state, out = sess.run([g_model.final_state, g_model.outputs],
 			feed_dict = {

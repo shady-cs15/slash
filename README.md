@@ -1,2 +1,3 @@
 # slash
-Teaching neural networks how to play guitar
+- Teaching neural networks how to play guitar
+- Under development

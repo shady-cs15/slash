@@ -7,54 +7,52 @@ import json
 
 # load training and validation data
 # data is randomly shuffled
-#files = os.listdir('../tmp/')
-#files = sorted(files)
-#files = [(('../tmp/'+files[i+1]), ('../tmp/'+files[i]))  for i in range(0, len(files), 2)]
-#print files, len(files)
-
 data = np.load('../tmp/data.npy')
-np.random.seed(0)
+np.random.seed(23455)
 np.random.shuffle(data)
-inputs = data[:, :1, :].transpose(0, 2, 1) #inputs
-masks = data[:, 1:, :].transpose(0, 2, 1) #masks
+inputs = data[:, :1, :].transpose(0, 2, 1)
+masks = data[:, 1:, :].transpose(0, 2, 1)
 
 
 # reshape into n_batches x batch_size x nsteps x 1
-batch_size = 25
-train_inputs = inputs[:200].reshape(8, 25, 8*int(1e4), 1)
-train_masks = masks[:200].reshape(8, 25, 8*int(1e4), 1)
-valid_inputs = inputs[200:].reshape(1, 25, 8*int(1e4), 1)
-valid_masks = masks[200:].reshape(1, 25, 8*int(1e4), 1)
+batch_size = 64
+n_train_batches = (inputs.shape[0] - batch_size)/batch_size
+train_inputs = inputs[:n_train_batches*batch_size].reshape(n_train_batches, batch_size, 8*int(1e4), 1)
+train_masks = masks[:n_train_batches*batch_size].reshape(n_train_batches, batch_size, 8*int(1e4), 1)
+valid_inputs = inputs[-batch_size:].reshape(1, batch_size, 8*int(1e4), 1)
+valid_masks = masks[-batch_size:].reshape(1, batch_size, 8*int(1e4), 1)
+print 'train data shape:', train_inputs.shape
+print 'valid data shape:', valid_inputs.shape
 
-print train_inputs.shape
-print valid_inputs.shape
 
 # network configurations
 global_context_size = 100
-bptt_steps = 2
+bptt_steps = 10
 n_epochs = 300
 clip_iter = 1
 best_val_loss = np.inf
-generation_freq = 10
-validation_freq = 5
+generation_freq = 14
+validation_freq = 7
 iter_ = 0
 start_ep = 0
 start_clip = 0
 
+
 # tensors to be fed to the model
 input = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps+global_context_size-1, 1])
 tf_masks = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps, 1])
-tf_inputs = (input- 7.5)/7.5#/7.5
+tf_inputs = (input- 7.5)/7.5
 tf_outputs = tf.placeholder(tf.uint8, [batch_size, global_context_size*bptt_steps, 1])
 tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=16), [batch_size, global_context_size*bptt_steps, 16])
 t_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, batch_size=batch_size, bptt_steps=bptt_steps, is_training=True)
+
 
 # gradient clipping
 # to prevent gradient explosion
 optimizer = tf.train.AdamOptimizer(0.01)
 global_step = tf.Variable(0)
 gradients, v = zip(*optimizer.compute_gradients(t_model.loss))
-gradients, _ = tf.clip_by_global_norm(gradients, 1.0)
+gradients, _ = tf.clip_by_global_norm(gradients, 1.25)
 optimizer = optimizer.apply_gradients(zip(gradients, v), global_step=global_step)
 saver = tf.train.Saver()
 if not os.path.exists('../params'):	os.makedirs('../params')
@@ -66,8 +64,8 @@ if not os.path.exists('../logs'):	os.makedirs('../logs')
 # generator thread, runs gen-script.py
 # and saves generated output in ./gen/*.wav
 # * = <train/test>_<iter>
-def generator(out_file, in_file, mask_file):
-	os.system('python gen-script.py '+out_file+' '+in_file+' '+mask_file)
+def generator(out_file, gen_indx):
+	os.system('python gen-script.py '+out_file+' '+str(gen_indx))
 
 
 # functions to dump and load state of the network
@@ -98,11 +96,12 @@ def load_state():
 	iter_ = dict_['iter']
 	start_ep = dict_['epoch']
 	last_clip = dict_['clip']
-	if (last_clip < (len(train_inputs)-1)):
+	if (last_clip < (train_inputs.shape[0]-1)):
 		start_clip = last_clip+1
 	else:
 		start_ep +=1
 		start_clip = 0
+
 
 # tensorflow Session
 # begins here
@@ -111,9 +110,13 @@ with tf.Session() as sess:
 
 	# load state of training
 	# and parameters of the neural network
-	if os.path.exists('../params/best_model.ckpt.meta'):
-		saver.restore(sess, '../params/best_model.ckpt')
+	if os.path.exists('../params/last_model.ckpt.meta'):
+		saver.restore(sess, '../params/last_model.ckpt')
 		print 'model restored from last checkpoint ..'
+	elif os.path.exists('../params/best_model.ckpt.meta'):
+		saver.restore(sess, '../params/best_model.ckpt.meta')
+		print 'model restored from last checkpoint ..'
+
 	z_state = (t_model.initial_state[0].eval(), t_model.initial_state[1].eval())
 	if os.path.exists('../logs/state.log'):
 		load_state()
@@ -122,10 +125,9 @@ with tf.Session() as sess:
 	# training begins here
 	for ep in range(start_ep, n_epochs):
 		for i in range(start_clip, train_inputs.shape[0]):
-			print 'epoch #', ep+1
+			print '\nepoch #', ep+1
 			for ci in range(clip_iter):
-				print 'Training on clip #', i+1, '/', train_inputs.shape[0]
-				print 'Clip iteration:', ci+1
+				print 'Training on batch #', i+1, '/', train_inputs.shape[0]
 				current_clip = train_inputs[i]
 				current_mask = train_masks[i]
 				n_bptt_batches = current_clip.shape[1] / (global_context_size * bptt_steps) - 1
@@ -136,8 +138,8 @@ with tf.Session() as sess:
 					bptt_batch_x = current_clip[:, start_ptr:end_ptr, :]
 					bptt_batch_y = current_clip[:, start_ptr+global_context_size:end_ptr+1, :]
 					bptt_batch_m = current_mask[:, start_ptr+global_context_size:end_ptr+1, :]
-					bptt_batch_loss, np_state, op, out, o1, o2 = \
-						sess.run([t_model.loss, t_model.final_state, optimizer, t_model.outputs, t_model.o1, t_model.o2],
+					bptt_batch_loss, np_state, op = \
+						sess.run([t_model.loss, t_model.final_state, optimizer],
 							feed_dict={
 								input: bptt_batch_x,
 								tf_outputs: bptt_batch_y,
@@ -147,24 +149,21 @@ with tf.Session() as sess:
 								t_model.generation_phase:False
 							})
 					iter_+=1
-					print 'iter:', iter_, ', bptt index:', j, ', loss:', bptt_batch_loss
-					print np.max(o2), np.min(o2), np.mean(o2)
-					print np.sum(o1>=0.5)#, o2
-					print np.sum((o1<0.5) & (o1>=0.))
-					print np.sum((o1>=-0.5) & (o1<0.))
-					print np.sum((o1<-0.5))
-					print np.bincount(np.array(out).flatten())
-					#print np_state[0], np_state[1]
-					#print '='*80
+					print 'iter:', iter_, ', bptt index:', j+1, ', loss:', bptt_batch_loss
+					#print np.max(o2), np.min(o2), np.mean(o2)
+					#print np.sum(o1>=0.5)#, o2
+					#print np.sum((o1<0.5) & (o1>=0.))
+					#print np.sum((o1>=-0.5) & (o1<0.))
+					#print np.sum((o1<-0.5))
+					#print np.bincount(np.array(out).flatten())
 
 			# check loss on validation data
 			# validation data is randomly
 			# sampled from validation set
 			# saves params only is loss improves
-			if i%validation_freq==0:
+			if (i+1)%validation_freq==0:
 				print
 				val_losses = []
-				#j = random.choice(range(valid_inputs.shape[0]))
 				for j in range(valid_inputs.shape[0]):
 					current_clip = valid_inputs[j]
 					current_mask = valid_masks[j]
@@ -200,14 +199,15 @@ with tf.Session() as sess:
 					save_path = saver.save(sess, "../params/last_model.ckpt")
 					print("Model saved in file: %s" % save_path)
 				dump_state(float(best_val_loss), iter_, ep, i)
-				print 'state dumped at ../logs/state.log ..\n'
+				print 'state dumped at ../logs/state.log ..'
 
 			# generate some audio after Training
-			# on every 10 audio clips, 1 ep = 175 clips
-			# approximately 17 outputs per epoch
-			# 170 outputs in total for each seed
-			#if i%generation_freq==0:
+			# on every 25 batches, 1 ep = 50 batches
+			# approximately 3 outputs per epoch
+			# 900 outputs in total for each seed
+			#if (i+1)%generation_freq==0:
 			#	print '='*80
 			#	print 'Generating sample audio ..'
-			#	generator('train_'+str(i/generation_freq)+'.wav', files[0][0], files[0][1])
+			#	generator('valid_'+str(i/generation_freq)+'.wav', inputs.shape[0]-batch_size)
 			#	print '='*80
+		start_clip=0
