@@ -24,7 +24,7 @@ if not os.path.exists('../gen'):	os.makedirs('../gen')
 saver = tf.train.Saver()
 
 with tf.Session() as sess:
-	saver.restore(sess, '../params/best_model.ckpt')
+	saver.restore(sess, '../params/last_model.ckpt')
 	print 'model restored..'
 	np_state = (g_model.initial_state[0].eval(), g_model.initial_state[1].eval())
 	predictions = []
