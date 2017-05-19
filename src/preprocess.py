@@ -20,6 +20,7 @@ if not os.path.exists('../waves/'):
     sys.exit(1)
 else:
     wave_files = os.listdir('../waves/')
+    wave_files = sorted(wave_files)
 
 if not os.path.exists('../tmp/'):
 	os.makedirs('../tmp/')
@@ -29,7 +30,7 @@ print 'starting preprocessing..'
 
 unit = int(1e4)
 max_len = 8*unit
-stride = 4*unit
+stride = 2*unit
 data = ()
 for i in range(len(wave_files)):
     bar.numerator = i+1
