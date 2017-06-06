@@ -16,7 +16,7 @@ masks = data[:, 1:, :].transpose(0, 2, 1)
 
 # reshape into n_batches x batch_size x nsteps x 1
 batch_size = 64
-n_train_batches = (inputs.shape[0] - batch_size)/batch_size
+n_train_batches = (inputs.shape[0])/batch_size# - batch_size)/batch_size
 train_inputs = inputs[:n_train_batches*batch_size].reshape(n_train_batches, batch_size, 8*int(1e4), 1)
 train_masks = masks[:n_train_batches*batch_size].reshape(n_train_batches, batch_size, 8*int(1e4), 1)
 valid_inputs = inputs[-batch_size:].reshape(1, batch_size, 8*int(1e4), 1)
@@ -32,7 +32,7 @@ n_epochs = 300
 clip_iter = 1
 best_val_loss = np.inf
 generation_freq = 14
-validation_freq = 7
+validation_freq = 3#7
 iter_ = 0
 start_ep = 0
 start_clip = 0
@@ -110,12 +110,12 @@ with tf.Session() as sess:
 
 	# load state of training
 	# and parameters of the neural network
-	if os.path.exists('../params/last_model.ckpt.meta'):
-		saver.restore(sess, '../params/last_model.ckpt')
+	if os.path.exists('../params/best_model.ckpt.meta'):
+		saver.restore(sess, '../params/best_model.ckpt')
 		print 'model restored from last checkpoint ..'
-	elif os.path.exists('../params/best_model.ckpt.meta'):
-		saver.restore(sess, '../params/best_model.ckpt.meta')
-		print 'model restored from last checkpoint ..'
+	elif os.path.exists('../params/last_model.ckpt.meta'):
+		saver.restore(sess, '../params/last_model.ckpt.meta')
+		print 'model restored from best checkpoint ..'
 
 	z_state = (t_model.initial_state[0].eval(), t_model.initial_state[1].eval())
 	if os.path.exists('../logs/state.log'):

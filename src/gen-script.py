@@ -19,13 +19,17 @@ tf_inputs = (input - 7.5)/7.5
 tf_outputs = tf.placeholder(tf.uint8, [batch_size, global_context_size, 1])
 tf_masks = tf.placeholder(tf.float32, [batch_size, global_context_size, 1])
 tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=16), [batch_size, global_context_size, 16])
-g_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, bptt_steps=1, batch_size=1, is_training=False)
+g_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, bptt_steps=1, batch_size=1, is_training=False, keep_prob=1.0)
 if not os.path.exists('../gen'):	os.makedirs('../gen')
 saver = tf.train.Saver()
 
 with tf.Session() as sess:
-	saver.restore(sess, '../params/last_model.ckpt')
-	print 'model restored..'
+	if os.path.exists('../params/last_model.ckpt.meta'):
+		saver.restore(sess, '../params/last_model.ckpt')
+		print 'model restored from last checkpoint ..'
+	elif os.path.exists('../params/best_model.ckpt.meta'):
+		saver.restore(sess, '../params/best_model.ckpt.meta')
+		print 'model restored from last checkpoint ..'
 	np_state = (g_model.initial_state[0].eval(), g_model.initial_state[1].eval())
 	predictions = []
 

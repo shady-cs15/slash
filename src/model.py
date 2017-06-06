@@ -16,7 +16,7 @@ import tensorflow as tf
 
 class sample_rnn():
 	def __init__(self, inputs, labels, masks, bptt_steps=2, global_context_size=100, local_context_size=10, lstm_dim=100,
-	sampl_dim=10, hid_dim1=80, hid_dim2=200, hid_dim3=500, out_dim=16, batch_size=1, is_training=True):
+	sampl_dim=10, hid_dim1=80, hid_dim2=200, hid_dim3=500, out_dim=16, batch_size=1, is_training=True, keep_prob=0.3):
 
 		def lu(f):
 			return tf.nn.dropout(f, 1.)
@@ -50,7 +50,6 @@ class sample_rnn():
 		self.generation_phase = tf.placeholder(tf.bool)
 		inputs = tf.cond(self.generation_phase, lambda:inputs[:,:global_context_size,:], lambda:inputs)
 
-		keep_prob = 0.3
 		global_mask = tf.concat([tf.ones(keep_prob*global_context_size), tf.zeros((1-keep_prob)*global_context_size)], 0)
 		local_mask = tf.concat([tf.ones(keep_prob*local_context_size), tf.zeros((1-keep_prob)*local_context_size)], 0)
 
@@ -95,7 +94,8 @@ class sample_rnn():
 
 					# sampling
 					sample = tf.multinomial(tf.log(tf.nn.softmax(out)), 1)
-					self.outputs.append(tf.reshape(sample, [batch_size, 1]))
+					if is_training is True:	self.outputs.append(tf.reshape(sample, [batch_size, 1]))
+					else:	self.outputs.append(tf.argmax(out, 1))
 
 					if is_training is False:
 						last_pred = (tf.cast(sample, tf.float32) -7.5)/7.5
