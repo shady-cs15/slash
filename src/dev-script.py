@@ -43,7 +43,7 @@ input = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps+g
 tf_masks = tf.placeholder(tf.float32, [batch_size, global_context_size*bptt_steps, 1])
 tf_inputs = (input- 7.5)/7.5
 tf_outputs = tf.placeholder(tf.uint8, [batch_size, global_context_size*bptt_steps, 1])
-tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=16), [batch_size, global_context_size*bptt_steps, 16])
+tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=256), [batch_size, global_context_size*bptt_steps, 256])
 t_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, batch_size=batch_size, bptt_steps=bptt_steps, is_training=True)
 
 

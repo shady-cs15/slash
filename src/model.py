@@ -16,7 +16,7 @@ import tensorflow as tf
 
 class sample_rnn():
 	def __init__(self, inputs, labels, masks, bptt_steps=2, global_context_size=100, local_context_size=10, lstm_dim=100,
-	sampl_dim=10, hid_dim1=80, hid_dim2=200, hid_dim3=500, out_dim=16, batch_size=1, is_training=True):
+	sampl_dim=10, hid_dim1=80, hid_dim2=300, hid_dim3=1000, out_dim=256, batch_size=1, is_training=True):
 
 		def lu(f):
 			return tf.nn.dropout(f, 1.)
@@ -89,6 +89,8 @@ class sample_rnn():
 						last_pred = (tf.cast(sample, tf.float32) -7.5)/7.5
 						last_pred = tf.reshape(last_pred, [1, 1, 1])
 						inputs = tf.cond(self.generation_phase, lambda: tf.concat([inputs, last_pred], axis=1), lambda: inputs)
+
+					print 'Graph built:', 100.*(i*global_context_size + j)/(bptt_steps*global_context_size), '%\033[F'
 
 			print 'Graph built:', 100.0, '%'
 			self.final_state = self.state

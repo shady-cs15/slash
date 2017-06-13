@@ -3,14 +3,14 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
-def mu_law_encoding(c_wave, n_channels=16):
+def mu_law_encoding(c_wave, n_channels=256):
 	mu = n_channels-1
 	abs_wave = np.minimum(np.abs(c_wave), 1.)
 	magnitude = np.log(1. + mu * abs_wave)/np.log(1. + mu)
 	c_wave = np.sign(c_wave)*magnitude
 	return ((c_wave+1)/2*mu + 0.5).astype('uint8')
 
-def mu_law_decoding(d_wave, n_channels=16):
+def mu_law_decoding(d_wave, n_channels=256):
 	mu = n_channels-1
 	d_wave = d_wave.astype('float32')
 	d_wave = 2 * (d_wave/mu) - 1

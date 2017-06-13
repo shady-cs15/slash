@@ -18,7 +18,7 @@ input = tf.placeholder(tf.float32, [batch_size, (global_context_size*2)-1, 1])
 tf_inputs = (input - 7.5)/7.5
 tf_outputs = tf.placeholder(tf.uint8, [batch_size, global_context_size, 1])
 tf_masks = tf.placeholder(tf.float32, [batch_size, global_context_size, 1])
-tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=16), [batch_size, global_context_size, 16])
+tf_labels = tf_masks*tf.reshape(tf.one_hot(tf_outputs, depth=256), [batch_size, global_context_size, 256])
 g_model = model.sample_rnn(tf_inputs, tf_labels, tf_masks, bptt_steps=1, batch_size=1, is_training=False)
 if not os.path.exists('../gen'):	os.makedirs('../gen')
 saver = tf.train.Saver()
@@ -31,7 +31,7 @@ with tf.Session() as sess:
 
 	# prediction phase
 	print 'Warming up rnn ..\n'
-	n_pred_batches = 50000/global_context_size - 1
+	n_pred_batches = 20000/global_context_size - 1
 	for i in range(n_pred_batches):
 		cur_input = inp_x[:, i*global_context_size:(i+2)*global_context_size-1, :]
 		cur_label = inp_x[:, (i+1)*global_context_size:(i+2)*global_context_size, :]
