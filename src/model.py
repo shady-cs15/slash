@@ -1,97 +1,74 @@
 import tensorflow as tf
 
-#	architecture is 2 tier
-#	bptt_steps: # steps for bptt / bptt truncation threshold; default = 10 (1/10th second)
-#	global_context_size: param for global context, default = 100
-#	local_context_size: param for local context, default = 10
-#	lstm_dim: dimension of the lstm layer for global context; default = 500
-#	sampl_dim: dimension of down sampling layer; default = 10
-#	hid_dim1: dimension of 1st hidden layer; default = 80
-#	hid_dim2: dimension of 2nd hidden layer; default = 200
-#	hid_dim3: dimension of 3rd hidden layer; default = 500
-#	out_dim : dimension of softmax layer; default = 16
-#	inputs is of shape: batch_size x (bptt_steps x global_context_size) x 1
-#	labels is of shape: batch_size x (bptt_steps x global_context_size) x 16
-
-
 class sample_rnn():
-	def __init__(self, inputs, labels, masks, bptt_steps=2, global_context_size=100, local_context_size=10, lstm_dim=100,
-	sampl_dim=10, hid_dim1=80, hid_dim2=300, hid_dim3=1000, out_dim=256, batch_size=1, is_training=True):
+	def __init__(self, inputs, labels, bptt_steps=64, context_size=16, dim=(256, 512), q_levels=16, batch_size=64, n_rnn=3, n_mlp=3, generator=False):
 
-		def lu(f):
-			return tf.nn.dropout(f, 1.)
+		self.bptt_steps = bptt_steps
+		self.context_size = context_size
+		self.dim = dim
+		self.q_levels = q_levels
+		self.batch_size = batch_size
+		self.n_rnn = n_rnn
+		self.n_mlp = n_mlp
 
+		# function to bound the initialisation weights
 		def w_b(n_in, n_out):
 			return (2./(n_in+n_out))**0.5
 
-		self.weights = {
-				'sampl': tf.Variable(tf.random_uniform([lstm_dim, sampl_dim], -w_b(lstm_dim, sampl_dim), w_b(lstm_dim, sampl_dim)), name='sampl/W'),
-				'hidn1': tf.Variable(tf.random_uniform([sampl_dim+local_context_size, hid_dim1], -w_b(sampl_dim+local_context_size, hid_dim1), w_b(sampl_dim+local_context_size, hid_dim1)), name='hidn1/W'),
-				'hidn2': tf.Variable(tf.random_uniform([hid_dim1, hid_dim2], -w_b(hid_dim1, hid_dim2), w_b(hid_dim1, hid_dim2)), name='hidn2/W'),
-				'hidn3': tf.Variable(tf.random_uniform([hid_dim2, hid_dim3], -w_b(hid_dim2, hid_dim3), w_b(hid_dim2, hid_dim3)), name='hidn3/W'),
-				'out': tf.Variable(tf.random_uniform([hid_dim3, out_dim], -w_b(hid_dim3, out_dim), w_b(hid_dim3, out_dim)), name='out/W')
-				}
+		# dictionary of weights and biases for fully connected layers
+		with tf.variable_scope('sample_rnn') as scope:
+			self.W = {
+				'samp': tf.Variable(tf.random_uniform([dim[0], dim[0]], -w_b(dim[0], dim[0]), w_b(dim[0], dim[0])), name='samp/W'),
+				'mlp0': tf.Variable(tf.random_uniform([2*context_size, dim[1]], -w_b(2*context_size, dim[1]), w_b(2*context_size, dim[1])), name='mlp0/W'),
+				'mlp1': tf.Variable(tf.random_uniform([dim[1], dim[1]], -w_b(dim[1], dim[1]), w_b(dim[1], dim[1])), name='mlp1/W'),
+				'mlp2': tf.Variable(tf.random_uniform([dim[1], q_levels], -w_b(dim[1], q_levels), w_b(dim[1], q_levels)), name='mlp2/W')
+			}
+			self.b = {
+				'samp': tf.Variable(tf.zeros([dim[0]]), name='samp/b'),
+				'mlp0': tf.Variable(tf.zeros([dim[1]]), name='mlp0/b'),
+				'mlp1': tf.Variable(tf.zeros([dim[1]]), name='mlp1/b'),
+				'mlp2': tf.Variable(tf.zeros([q_levels]), name='mlp2/b')
+			}
 
-		self.biases = {
-				'sampl': tf.Variable(tf.zeros([sampl_dim]), name='sampl/b'),
-				'hidn1': tf.Variable(tf.zeros([hid_dim1]), name='hidn1/b'),
-				'hidn2': tf.Variable(tf.zeros([hid_dim2]), name='hidn2/b'),
-				'hidn3': tf.Variable(tf.zeros([hid_dim3]), name='hidn3/b'),
-				'out':	tf.Variable(tf.zeros([out_dim]), name='out/b')
-				}
+		def stacked_mlps(inputs, n_mlps):
+			assert n_mlps<=3
+			mlp0_out = tf.nn.relu(tf.matmul(inputs, self.W['mlp0']) + self.b['mlp0'])
+			if n_mlps==1:	return mlp0_out
+			mlp1_out = tf.nn.relu(tf.matmul(mlp0_out, self.W['mlp1']) + self.b['mlp1'])
+			if n_mlps==2:	return mlp1_out
+			return tf.nn.relu(tf.matmul(mlp1_out, self.W['mlp2']) + self.b['mlp2'])
 
-		lstm_cell = tf.contrib.rnn.BasicLSTMCell(lstm_dim)#, activation=lu)
-		self.initial_state = self.state = lstm_cell.zero_state(batch_size, tf.float32)
-		self.total_loss = 0.
-		self.mean_acc = 0.
-		self.outputs = []
-		self.loss = 0.
-		count = 0
-		self.generation_phase = tf.placeholder(tf.bool)
-		inputs = tf.cond(self.generation_phase, lambda:inputs[:,:global_context_size,:], lambda:inputs)
 
-		print 'Building computation graph ..'
-		with tf.variable_scope('RNN') as scope:
+		cell = tf.contrib.rnn.BasicLSTMCell(dim[0])
+		stacked_lstm = tf.contrib.rnn.MultiRNNCell([cell] * n_rnn)
+		self.initial_state = self.state = stacked_lstm.zero_state(batch_size, tf.float32)
+		self.loss = []
+
+		print 'Building computation graph..\n'
+		with tf.variable_scope('sample_rnn') as scope:
 			for i in range(bptt_steps):
-				if i>0:	scope.reuse_variables()
+				if generator==True:	scope.reuse_variables()
+				elif i>0:	scope.reuse_variables()
 
-				global_context = inputs[:, i*global_context_size:(i+1)*global_context_size, :]
-				global_context = tf.reshape(global_context, [batch_size, global_context_size])
-				lstm_output, self.state = lstm_cell(global_context, self.state)
-				down_sampl = tf.nn.tanh(tf.matmul(lstm_output, self.weights['sampl']) + self.biases['sampl'])#/sampl_dim)
-				#down_sampl = down_sampl/tf.reduce_max(down_sampl)
-				#down_sampl = (down_sampl - tf.reduce_min(down_sampl))/(tf.reduce_max(down_sampl)-tf.reduce_min(down_sampl))
-				#down_sampl = tf.zeros([batch_size, 10])
+				lstm_inp = inputs[:, i*context_size:(i+1)*context_size, :]
+				lstm_inp = tf.reshape(lstm_inp, [batch_size, context_size])
+				lstm_out, self.state = stacked_lstm(lstm_inp, self.state)
+				emb = tf.matmul(lstm_out, self.W['samp']) + self.b['samp']
 
-				#if i==0:	self.o1, self.o2 = lstm_output, down_sampl  # remove
-				print 'Graph built:', i*100./bptt_steps, '%'
-				for j in range(global_context_size):
-					pred_index = (i+1)*global_context_size + j
-					local_context =  inputs[:, pred_index-local_context_size:pred_index, :]
-					local_context = tf.reshape(local_context, [batch_size, local_context_size])
-					conc = tf.concat([down_sampl, local_context], axis=1)
-					hid1 = tf.nn.relu(tf.matmul(conc, self.weights['hidn1']) + self.biases['hidn1'])
-					hid2 = tf.nn.relu(tf.matmul(hid1, self.weights['hidn2']) + self.biases['hidn2'])
-					hid3 = tf.nn.relu(tf.matmul(hid2, self.weights['hidn3']) + self.biases['hidn3'])
-					out = tf.matmul(hid3, self.weights['out']) + self.biases['out']
-					out = tf.multiply(out, masks[:, pred_index - global_context_size])
+				print '\033[FGraph built: {:.2f} %'.format(i*100./bptt_steps)
+				for j in range(context_size):
+					global_context = emb[:, j*context_size:(j+1)*context_size]
+					pred_index = (i+1)*context_size + j
+					local_context =  inputs[:, pred_index-context_size:pred_index, :]
+					local_context = tf.reshape(local_context, [batch_size, context_size])
+					context = tf.concat([global_context, local_context], 1)
+					mlps_out = stacked_mlps(context, n_mlp)
 
 					# loss
-					label = labels[:, pred_index-global_context_size, :]
-					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=labels[:, pred_index-global_context_size, :], logits=out))
-					self.loss += loss
-					count += tf.reduce_mean(masks[:, pred_index - global_context_size, 0])
+					label = labels[:, pred_index-context_size, :]
+					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=mlps_out))
+					self.loss.append(loss)
 
-					# sampling
-					if is_training is False:
-						sample = tf.multinomial(tf.log(tf.nn.softmax(out)), 1)
-						self.outputs.append(tf.argmax(out, 1))#sample)
-						last_pred = (tf.cast(sample, tf.float32) -7.5)/7.5
-						last_pred = tf.reshape(last_pred, [1, 1, 1])
-						inputs = tf.cond(self.generation_phase, lambda: tf.concat([inputs, last_pred], axis=1), lambda: inputs)
-
-					print 'Graph built:', 100.*(i*global_context_size + j)/(bptt_steps*global_context_size), '%\033[F'
-
-			print 'Graph built:', 100.0, '%'
-			self.final_state = self.state
-			self.loss /= count
+		print 'computation graph built..'
+		self.final_state = self.state
+		self.loss = tf.reduce_mean(self.loss)

@@ -17,19 +17,19 @@ def mu_law_decoding(d_wave, n_channels=256):
 	magnitude = (1./mu) * ((1. + mu)**abs(d_wave) - 1.)
 	return np.sign(d_wave) * magnitude
 
-def load_file(file_name):
-	raw, sr = librosa.load(file_name, mono=False, sr=10000)
+def load_file(file_name, sr, q_levels):
+	raw, sr = librosa.load(file_name, mono=False, sr=sr)
 	wave = raw[1]
 	scale = np.max(np.abs(wave))
 	wave /= scale
-	wave = mu_law_encoding(wave)
+	wave = mu_law_encoding(wave, q_levels)
 	return wave
 
-def save_file(file_name, wave):
-	wave = mu_law_decoding(wave)
+def save_file(file_name, wave, sr, q_levels):
+	wave = mu_law_decoding(wave, q_levels)
 	scale = np.max(np.abs(wave))
 	wave /= scale
-	librosa.output.write_wav(file_name, wave, 10000)
+	librosa.output.write_wav(file_name, wave, sr)
 
 def add_noise_and_augment(data, prob=0.33, n_noisy_augs=4):
 	pass

@@ -11,44 +11,52 @@
 import numpy as np
 import data_utils as du
 import os
-from etaprogress.progress import ProgressBar as pgb
 import sys
+from etaprogress.progress import ProgressBar as pgb
+from ConfigParser import ConfigParser as Config
 
-
-if not os.path.exists('../waves/'):
+load_path = '../waves2/'
+save_path = '../tmp/'
+if not os.path.exists(load_path):
     print 'ERROR: waves directory not found!'
     sys.exit(1)
 else:
-    wave_files = os.listdir('../waves/')
+    wave_files = os.listdir(load_path)
     wave_files = sorted(wave_files)
 
-if not os.path.exists('../tmp/'):
-	os.makedirs('../tmp/')
+if not os.path.exists(save_path):
+	os.makedirs(save_path)
+
+cfg = Config()
+cfg.read('settings.cfg')
+sr = int(cfg.get('process', 'bitrate'))
+q_levels = int(cfg.get('process', 'q_levels'))
+seq_len = int(cfg.get('process', 'seq_len'))
 
 bar = pgb(len(wave_files), max_width=50)
 print 'starting preprocessing..'
 
 unit = int(1e4)
-max_len = 8*unit
+max_len = seq_len*unit
 stride = 2*unit
 data = ()
 for i in range(len(wave_files)):
     bar.numerator = i+1
     clip_name = wave_files[i][:-4]
-    q_wave = du.load_file('../waves/'+wave_files[i])
+    q_wave = du.load_file(load_path+wave_files[i], sr, q_levels)
     length = (q_wave.shape[0]/unit)*unit
     q_wave = q_wave[:length]
     start_ptr = 0
     while(start_ptr +stride<length):
         subclip = q_wave[start_ptr:start_ptr+max_len]
-        mask = np.ones(subclip.shape[0])
-        if subclip.shape[0]<max_len:
-            subclip = np.concatenate([subclip, np.zeros([max_len-subclip.shape[0]])])
-            mask = np.concatenate([mask, np.zeros(max_len-mask.shape[0])])
-        subcliptuple = np.array([subclip, mask]).reshape(1, 2, max_len)
-        data += (subcliptuple,)
         start_ptr+=stride
+        if subclip.shape[0]<max_len:
+            continue
+        subclip = (subclip).reshape(1, max_len)
+        data += (subclip,)
     print '\033[Ffiles processed:', bar
 data = np.concatenate(data).astype(np.uint8)
-np.save('../tmp/data.npy', data)
-print 'waves and masks stored in ../tmp/data.npy'
+save_file = save_path+'data.npy'
+np.save(save_file, data)
+print 'quantized waves stored in', save_file
+print 'data shape:', data.shape
