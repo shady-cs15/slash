@@ -10,6 +10,7 @@ class sample_rnn():
 		self.batch_size = batch_size
 		self.n_rnn = n_rnn
 		self.n_mlp = n_mlp
+		self.mean = (q_levels - 1)/2.
 
 		# function to bound the initialisation weights
 		def w_b(n_in, n_out):
@@ -45,6 +46,8 @@ class sample_rnn():
 		stacked_lstm = tf.contrib.rnn.MultiRNNCell([cell] * n_rnn)
 		self.initial_state = self.state = stacked_lstm.zero_state(batch_size, tf.float32)
 		self.loss = []
+		self.generation_phase = tf.placeholder(tf.bool)
+		inputs = tf.cond(self.generation_phase, lambda:inputs[:,:context_size,:], lambda:inputs)
 
 		print 'Building computation graph..\n'
 		with tf.variable_scope('sample_rnn') as scope:
@@ -65,12 +68,21 @@ class sample_rnn():
 					local_context = tf.reshape(local_context, [batch_size, context_size])
 					context = tf.concat([global_context, local_context], 1)
 					mlps_out = stacked_mlps(context, n_mlp)
+					out = tf.nn.softmax(mlps_out)
 
 					# loss
 					label = labels[:, pred_index-context_size, :]
-					loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=label, logits=mlps_out))
+					loss = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=label, logits=out))
 					self.loss.append(loss)
+
+					# sample
+					if generator==True:
+						sample = tf.multinomial(tf.nn.softmax(out), 1)
+						last_pred = (tf.cast(sample, tf.float32) - self.mean)/self.mean
+						last_pred = tf.reshape(last_pred, [batch_size, 1, 1])
+						inputs = tf.cond(self.generation_phase, lambda: tf.concat([inputs, last_pred], axis=1), lambda: inputs)
 
 		print 'computation graph built..'
 		self.final_state = self.state
 		self.loss = tf.reduce_mean(self.loss)
+		self.outputs = (inputs * self.mean + self.mean)

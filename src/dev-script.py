@@ -6,6 +6,7 @@ import random
 import json
 from ConfigParser import ConfigParser as Config
 from operator import mul
+import data_utils as du
 
 # read configurations
 cfg = Config()
@@ -19,6 +20,7 @@ val_freq = int(cfg.get('train', 'val_freq'))
 q_levels = int(cfg.get('process', 'q_levels'))
 seq_len = int(cfg.get('process', 'seq_len'))
 n_samples = int(cfg.get('train', 'n_samples'))
+bitrate = int(cfg.get('process', 'bitrate'))
 
 # load training and validation data
 # data is randomly shuffled
@@ -38,7 +40,7 @@ best_val_loss = np.inf
 iter_ = 0
 start_ep = 0
 start_batch = 0
-mean = q_levels/2.
+mean = (q_levels-1)/2.
 
 
 # tensors to be fed to the model
@@ -85,7 +87,7 @@ def generate_samples(iter_, sess, gen_path='../gen/'):
 	global inputs, context_size, n_samples, g_model, gtf_inputs, gtf_outputs, gtf_labels
 	indices = random.sample(range(inputs.shape[0]), n_samples)
 	data = []
-	seed_length = int(1e4)
+	seed_length = int(1e3)
 	for i in range(n_samples):
 		cur_seed = inputs[indices[i], :seed_length].reshape(1, seed_length, 1)
 		data.append(cur_seed)
@@ -102,11 +104,34 @@ def generate_samples(iter_, sess, gen_path='../gen/'):
 			feed_dict = {
 				g_input:cur_batch,
 				gtf_outputs:cur_label,
-				g_model.initial_state:g_np_state
+				g_model.initial_state:g_np_state,
+				g_model.generation_phase:False
 			})
 
 	print 'generating sequences..'
-	gen_len = 5
+	outputs = []
+	n_gen_batches = int(5e4)/context_size
+	input = cur_batch[:, -context_size:, :]
+	label = cur_label
+	for i in range(n_gen_batches):
+		input = np.concatenate([input, np.zeros([n_samples, context_size-1, 1], np.float32)], axis=1)
+		g_np_state, output = sess.run([g_model.final_state, g_model.outputs],
+			feed_dict = {
+				g_input:input,
+				gtf_outputs:label,
+				g_model.initial_state:g_np_state,
+				g_model.generation_phase:True
+			}
+		)
+		#print input[0].flatten()
+		#print output[0].flatten()
+		input = output[:, -context_size:, :].astype(np.uint8)
+		outputs.append(input)
+	outputs = np.concatenate(outputs, axis=1)
+
+	for i in range(outputs.shape[0]):
+		out_file = str(iter_)+'_'+str(i)
+		du.save_file(gen_path+out_file, outputs[i].flatten(), bitrate, q_levels)
 
 # functions to dump and load state of the network
 # state includes (before saving weights) -
@@ -147,7 +172,6 @@ def load_state():
 # begins here
 with tf.Session() as sess:
 	sess.run(tf.global_variables_initializer())
-	print '='*80
 	# load state of training
 	# and parameters of the neural network
 	if os.path.exists('../params/last_model.ckpt.meta'):
@@ -165,7 +189,8 @@ with tf.Session() as sess:
 	# training begins here
 	for ep in range(start_ep, n_epochs):
 		for i in range(start_batch, train_inputs.shape[0]):
-			print '\nepoch #', ep+1
+			print '='*80
+			print 'epoch #', ep+1
 			print 'Training on batch #', i+1, '/', train_inputs.shape[0]
 			current_batch = train_inputs[i]
 			n_bptt_batches = current_batch.shape[1] / (context_size * bptt_steps) - 1
@@ -181,7 +206,8 @@ with tf.Session() as sess:
 							feed_dict={
 								input: bptt_batch_x,
 								tf_outputs: bptt_batch_y,
-								t_model.initial_state:np_state
+								t_model.initial_state:np_state,
+								t_model.generation_phase:False
 							})
 				iter_+=1
 				print 'iter:', iter_, ', bptt index:', j+1, ', loss:', bptt_batch_loss
@@ -206,7 +232,8 @@ with tf.Session() as sess:
 									feed_dict={
 										input:bptt_batch_x,
 										tf_outputs:bptt_batch_y,
-										t_model.initial_state:np_state
+										t_model.initial_state:np_state,
+										t_model.generation_phase:False
 									})
 							val_losses.append(bptt_batch_loss)
 							if (j*n_bptt_batches+k+1)%200==0.0:
@@ -224,11 +251,12 @@ with tf.Session() as sess:
 						print("Model saved in file: %s" % save_path)
 					dump_state(float(best_val_loss), iter_, ep, i)
 					print 'state dumped at ../logs/state.log ..'
-					print '='*80
+
 
 				# generate some audio after Training
 				if (iter_+1)%gen_freq==0:
+					print '='*80
 					print 'Generating sample audio ..'
 					generate_samples(iter_, sess)
-					print '='*80
+
 		start_clip=0
