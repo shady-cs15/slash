@@ -30,9 +30,9 @@ print '='*80
 inputs = np.load('../tmp/data.npy')
 np.random.seed(23455)
 np.random.shuffle(inputs)
-n_train_batches = (inputs.shape[0] - batch_size)/batch_size
+n_train_batches = (inputs.shape[0] - 2*batch_size)/batch_size
 train_inputs = inputs[:n_train_batches*batch_size].reshape(n_train_batches, batch_size, seq_len*int(1e4), 1)
-valid_inputs = inputs[-batch_size:].reshape(1, batch_size, seq_len*int(1e4), 1)
+valid_inputs = inputs[-2*batch_size:].reshape(2, batch_size, seq_len*int(1e4), 1)
 print 'train data shape:', train_inputs.shape
 print 'valid data shape:', valid_inputs.shape
 
