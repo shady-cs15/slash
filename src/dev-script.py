@@ -18,6 +18,7 @@ gen_freq = int(cfg.get('train', 'gen_freq'))
 val_freq = int(cfg.get('train', 'val_freq'))
 q_levels = int(cfg.get('process', 'q_levels'))
 seq_len = int(cfg.get('process', 'seq_len'))
+n_samples = int(cfg.get('train', 'n_samples'))
 
 # load training and validation data
 # data is randomly shuffled
@@ -52,7 +53,6 @@ t_model = model.sample_rnn(tf_inputs, tf_labels, batch_size=batch_size, bptt_ste
 # to prevent gradient explosion
 optimizer = tf.train.AdamOptimizer(0.001)
 global_step = tf.Variable(0, trainable=False)
-tvars = tf.trainable_variables()
 gradients, v = zip(*optimizer.compute_gradients(t_model.loss))
 gradients, _ = tf.clip_by_global_norm(gradients, 1.25)
 optimizer = optimizer.apply_gradients(zip(gradients, v), global_step=global_step)
@@ -64,6 +64,7 @@ if not os.path.exists('../logs'):	os.makedirs('../logs')
 print '='*80
 print 'architecture of train model..'
 total_params = 0
+tvars = tf.trainable_variables()
 for var in tvars:
 	print var.name, var.get_shape()
 	total_params += int(np.prod(list(var.get_shape())))
@@ -73,18 +74,39 @@ print '='*80
 # saves generated output in ./gen/*.wav
 # iter_id.wav
 print 'Generator model..'
-g_input = tf.placeholder(tf.float32, [batch_size, context_size*2-1, 1])
+g_input = tf.placeholder(tf.float32, [n_samples, context_size*2-1, 1])
 gtf_inputs = (g_input- mean)/mean
-gtf_outputs = tf.placeholder(tf.uint8, [batch_size, context_size, 1])
-gtf_labels = tf.reshape(tf.one_hot(gtf_outputs, depth=q_levels), [batch_size, context_size, q_levels])
-g_model = model.sample_rnn(gtf_inputs, gtf_labels, batch_size=batch_size, bptt_steps=1, generator=True)
+gtf_outputs = tf.placeholder(tf.uint8, [n_samples, context_size, 1])
+gtf_labels = tf.reshape(tf.one_hot(gtf_outputs, depth=q_levels), [n_samples, context_size, q_levels])
+g_model = model.sample_rnn(gtf_inputs, gtf_labels, batch_size=n_samples, bptt_steps=1, generator=True)
 print '='*80
 
-def generate_samples(out_file, gen_indx):
-	pass
-	#first load params from file
-	#os.system('python gen-script.py '+out_file+' '+str(gen_indx))
+def generate_samples(iter_, sess, gen_path='../gen/'):
+	global inputs, context_size, n_samples, g_model, gtf_inputs, gtf_outputs, gtf_labels
+	indices = random.sample(range(inputs.shape[0]), n_samples)
+	data = []
+	seed_length = int(1e4)
+	for i in range(n_samples):
+		cur_seed = inputs[indices[i], :seed_length].reshape(1, seed_length, 1)
+		data.append(cur_seed)
+	data = np.concatenate(data, 0)
 
+	n_pred_batches = seed_length/context_size - 1
+	g_np_state = sess.run(g_model.initial_state)
+
+	print 'warming up rnn..'
+	for j in range(n_pred_batches):
+		cur_batch = data[:, j*context_size:(j+2)*context_size-1, :]
+		cur_label = data[:, (j+1)*context_size:(j+2)*context_size, :]
+		loss, g_np_state = sess.run([g_model.loss, g_model.final_state],
+			feed_dict = {
+				g_input:cur_batch,
+				gtf_outputs:cur_label,
+				g_model.initial_state:g_np_state
+			})
+
+	print 'generating sequences..'
+	gen_len = 5
 
 # functions to dump and load state of the network
 # state includes (before saving weights) -
@@ -148,6 +170,7 @@ with tf.Session() as sess:
 			current_batch = train_inputs[i]
 			n_bptt_batches = current_batch.shape[1] / (context_size * bptt_steps) - 1
 			np_state = z_state
+
 			for j in range(n_bptt_batches):
 				start_ptr = j*context_size*bptt_steps
 				end_ptr = (j+1)*context_size*bptt_steps + context_size - 1
@@ -204,11 +227,8 @@ with tf.Session() as sess:
 					print '='*80
 
 				# generate some audio after Training
-				# on every 25 batches, 1 ep = 50 batches
-				# approximately 3 outputs per epoch
-				# 900 outputs in total for each seed
-				#if (iter_+1)%generation_freq==0:
-				#	print 'Generating sample audio ..'
-				#	generator('valid_'+str(i/generation_freq)+'.wav', inputs.shape[0]-batch_size)
-				#	print '='*80
+				if (iter_+1)%gen_freq==0:
+					print 'Generating sample audio ..'
+					generate_samples(iter_, sess)
+					print '='*80
 		start_clip=0

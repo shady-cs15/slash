@@ -17,17 +17,19 @@ class sample_rnn():
 
 		# dictionary of weights and biases for fully connected layers
 		with tf.variable_scope('sample_rnn') as scope:
+			if generator==True:
+				tf.get_variable_scope().reuse_variables()
 			self.W = {
-				'samp': tf.Variable(tf.random_uniform([dim[0], dim[0]], -w_b(dim[0], dim[0]), w_b(dim[0], dim[0])), name='samp/W'),
-				'mlp0': tf.Variable(tf.random_uniform([2*context_size, dim[1]], -w_b(2*context_size, dim[1]), w_b(2*context_size, dim[1])), name='mlp0/W'),
-				'mlp1': tf.Variable(tf.random_uniform([dim[1], dim[1]], -w_b(dim[1], dim[1]), w_b(dim[1], dim[1])), name='mlp1/W'),
-				'mlp2': tf.Variable(tf.random_uniform([dim[1], q_levels], -w_b(dim[1], q_levels), w_b(dim[1], q_levels)), name='mlp2/W')
+				'samp': tf.get_variable('samp/W', [dim[0], dim[0]], tf.float32, tf.random_uniform_initializer(-w_b(dim[0], dim[0]), w_b(dim[0], dim[0]))),
+				'mlp0': tf.get_variable('mlp0/W', [2*context_size, dim[1]], tf.float32, tf.random_uniform_initializer(-w_b(2*context_size, dim[1]), w_b(2*context_size, dim[1]))),
+				'mlp1': tf.get_variable('mlp1/W', [dim[1], dim[1]], tf.float32, tf.random_uniform_initializer(-w_b(dim[1], dim[1]), w_b(dim[1], dim[1]))),
+				'mlp2': tf.get_variable('mlp2/W', [dim[1], q_levels], tf.float32, tf.random_uniform_initializer(-w_b(dim[1], q_levels), w_b(dim[1], q_levels)))
 			}
 			self.b = {
-				'samp': tf.Variable(tf.zeros([dim[0]]), name='samp/b'),
-				'mlp0': tf.Variable(tf.zeros([dim[1]]), name='mlp0/b'),
-				'mlp1': tf.Variable(tf.zeros([dim[1]]), name='mlp1/b'),
-				'mlp2': tf.Variable(tf.zeros([q_levels]), name='mlp2/b')
+				'samp': tf.get_variable('samp/b', [dim[0]], tf.float32, tf.constant_initializer(0.0)),
+				'mlp0': tf.get_variable('mlp0/b', [dim[1]], tf.float32, tf.constant_initializer(0.0)),
+				'mlp1': tf.get_variable('mlp1/b', [dim[1]], tf.float32, tf.constant_initializer(0.0)),
+				'mlp2': tf.get_variable('mlp2/b', [q_levels], tf.float32, tf.constant_initializer(0.0))
 			}
 
 		def stacked_mlps(inputs, n_mlps):
