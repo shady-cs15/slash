@@ -21,6 +21,7 @@ q_levels = int(cfg.get('process', 'q_levels'))
 seq_len = int(cfg.get('process', 'seq_len'))
 n_samples = int(cfg.get('train', 'n_samples'))
 bitrate = int(cfg.get('process', 'bitrate'))
+train_summary_freq = int(cfg.get('train', 'train_summary_freq'))
 
 # load training and validation data
 # data is randomly shuffled
@@ -50,7 +51,6 @@ tf_outputs = tf.placeholder(tf.uint8, [batch_size, context_size*bptt_steps, 1])
 tf_labels = tf.reshape(tf.one_hot(tf_outputs, depth=q_levels), [batch_size, context_size*bptt_steps, q_levels])
 t_model = model.sample_rnn(tf_inputs, tf_labels, batch_size=batch_size, bptt_steps=bptt_steps)
 
-
 # gradient clipping
 # to prevent gradient explosion
 optimizer = tf.train.AdamOptimizer(0.001)
@@ -62,6 +62,12 @@ saver = tf.train.Saver()
 if not os.path.exists('../params'):	os.makedirs('../params')
 if not os.path.exists('../gen'):	os.makedirs('../gen')
 if not os.path.exists('../logs'):	os.makedirs('../logs')
+if not os.path.exists('../logs/train'):	os.makedirs('../logs/train')
+if not os.path.exists('../logs/valid'):	os.makedirs('../logs/valid')
+
+#summary
+tf.summary.scalar('loss', t_model.loss)
+summary_op = tf.summary.merge_all()
 
 print '='*80
 print 'architecture of train model..'
@@ -172,6 +178,9 @@ def load_state():
 # begins here
 with tf.Session() as sess:
 	sess.run(tf.global_variables_initializer())
+	train_writer = tf.summary.FileWriter('../logs/train', tf.get_default_graph())
+	valid_writer = tf.summary.FileWriter('../logs/valid')
+
 	# load state of training
 	# and parameters of the neural network
 	if os.path.exists('../params/last_model.ckpt.meta'):
@@ -187,6 +196,7 @@ with tf.Session() as sess:
 		print 'network state restored from last saved instance ..'
 
 	# training begins here
+	train_losses = []
 	for ep in range(start_ep, n_epochs):
 		for i in range(start_batch, train_inputs.shape[0]):
 			print '='*80
@@ -201,8 +211,8 @@ with tf.Session() as sess:
 				end_ptr = (j+1)*context_size*bptt_steps + context_size - 1
 				bptt_batch_x = current_batch[:, start_ptr:end_ptr, :]
 				bptt_batch_y = current_batch[:, start_ptr+context_size:end_ptr+1, :]
-				bptt_batch_loss, np_state, op = \
-						sess.run([t_model.loss, t_model.final_state, optimizer],
+				bptt_batch_loss, np_state, op, summary = \
+						sess.run([t_model.loss, t_model.final_state, optimizer, summary_op],
 							feed_dict={
 								input: bptt_batch_x,
 								tf_outputs: bptt_batch_y,
@@ -210,8 +220,12 @@ with tf.Session() as sess:
 								t_model.generation_phase:False
 							})
 				iter_+=1
-				print 'iter:', iter_, ', bptt index:', j+1, ', loss:', bptt_batch_loss
+				train_losses.append(bptt_batch_loss)
 
+				# check and write summaries
+				if (iter_+1)%train_summary_freq==0:
+					print 'iter:', iter_, ', loss:', bptt_batch_loss
+					train_writer.add_summary(summary, iter_+1)
 
 				# check loss on validation data
 				if (iter_+1)%val_freq==0:
@@ -227,8 +241,8 @@ with tf.Session() as sess:
 							end_ptr = (j+1)*context_size*bptt_steps + context_size - 1
 							bptt_batch_x = current_batch[:, start_ptr:end_ptr, :]
 							bptt_batch_y = current_batch[:, start_ptr+context_size:end_ptr+1, :]
-							bptt_batch_loss, np_state = \
-								sess.run([t_model.loss, t_model.final_state],
+							bptt_batch_loss, np_state, summary = \
+								sess.run([t_model.loss, t_model.final_state, summary_op],
 									feed_dict={
 										input:bptt_batch_x,
 										tf_outputs:bptt_batch_y,
@@ -239,7 +253,13 @@ with tf.Session() as sess:
 							if (j*n_bptt_batches+k+1)%200==0.0:
 								print '\033[Fminibatch ({}/{}), validation loss : {:.7f}'.format((j)*n_bptt_batches+k+1, n_bptt_batches*valid_inputs.shape[0], bptt_batch_loss)
 					cur_val_loss = np.mean(val_losses)
+					valid_writer.add_summary(summary, iter_+1)
+					mean_train_loss = np.mean(train_losses)
+					train_losses = []
+					print 'mean train loss:', mean_train_loss
 					print 'mean validation loss:', cur_val_loss
+					print 'best validation loss so far:', best_val_loss
+
 					if cur_val_loss<best_val_loss:
 						print 'validation loss improved! {:.4f}->{:.4f}'.format(best_val_loss, cur_val_loss)
 						best_val_loss = cur_val_loss
@@ -251,12 +271,14 @@ with tf.Session() as sess:
 						print("Model saved in file: %s" % save_path)
 					dump_state(float(best_val_loss), iter_, ep, i)
 					print 'state dumped at ../logs/state.log ..'
+					print '='*80
+
 
 
 				# generate some audio after Training
 				if (iter_+1)%gen_freq==0:
-					print '='*80
 					print 'Generating sample audio ..'
 					generate_samples(iter_, sess)
+					print '='*80
 
 		start_clip=0
