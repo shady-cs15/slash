@@ -15,7 +15,7 @@ import sys
 from etaprogress.progress import ProgressBar as pgb
 from ConfigParser import ConfigParser as Config
 
-load_path = '../waves2/'
+load_path = '../waves/'
 save_path = '../tmp/'
 if not os.path.exists(load_path):
     print 'ERROR: waves directory not found!'
@@ -42,6 +42,7 @@ stride = 2*unit
 data = ()
 for i in range(len(wave_files)):
     bar.numerator = i+1
+    if wave_files[i][0]=='.': continue
     clip_name = wave_files[i][:-4]
     q_wave = du.load_file(load_path+wave_files[i], sr, q_levels)
     length = (q_wave.shape[0]/unit)*unit

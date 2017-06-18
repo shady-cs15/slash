@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 class sample_rnn():
-	def __init__(self, inputs, labels, bptt_steps=64, context_size=16, dim=(256, 512), q_levels=16, batch_size=64, n_rnn=3, n_mlp=3, generator=False):
+	def __init__(self, inputs, labels, bptt_steps=64, context_size=16, dim=(256, 1024), q_levels=256, batch_size=64, n_rnn=3, n_mlp=3, generator=False):
 
 		self.bptt_steps = bptt_steps
 		self.context_size = context_size
