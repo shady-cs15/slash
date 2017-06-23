@@ -256,7 +256,7 @@ with tf.Session() as sess:
 										t_model.generation_phase:False
 									})
 							val_losses.append(bptt_batch_loss)
-							if (j*n_bptt_batches+k+1)%200==0.0:
+							if (j*n_bptt_batches+k+1)%20==0.0:
 								print '\033[Fminibatch ({}/{}), validation loss : {:.7f}'.format((j)*n_bptt_batches+k+1, n_bptt_batches*valid_inputs.shape[0], bptt_batch_loss)
 					cur_val_loss = np.mean(val_losses)
 					mean_train_loss = np.mean(train_losses)
