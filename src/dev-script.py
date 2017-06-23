@@ -1,3 +1,7 @@
+# floyd-hub version
+# floyd run --env tensorflow-1.0:py2 --gpu --data HueSWP3orazeeUpMzKtnqf:data --data xyz:params --data yxz:logs "python dev-script.py"
+
+
 import os
 import numpy as np
 import model
@@ -7,6 +11,7 @@ import json
 from ConfigParser import ConfigParser as Config
 from operator import mul
 import data_utils as du
+import matplotlib.pyplot as plt
 
 # read configurations
 cfg = Config()
@@ -27,15 +32,14 @@ train_summary_freq = int(cfg.get('train', 'train_summary_freq'))
 # data is randomly shuffled
 # reshape into n_batches x batch_size x nsteps x 1
 print '='*80
-inputs = np.load('../tmp/data.npy')
+inputs = np.load('/data/data.npy')
 np.random.seed(23455)
 np.random.shuffle(inputs)
-n_train_batches = (inputs.shape[0] - 2*batch_size)/batch_size
+n_train_batches = (inputs.shape[0] - 1*batch_size)/batch_size
 train_inputs = inputs[:n_train_batches*batch_size].reshape(n_train_batches, batch_size, seq_len*int(1e4), 1)
-valid_inputs = inputs[-2*batch_size:].reshape(2, batch_size, seq_len*int(1e4), 1)
+valid_inputs = inputs[-1*batch_size:].reshape(1, batch_size, seq_len*int(1e4), 1)
 print 'train data shape:', train_inputs.shape
 print 'valid data shape:', valid_inputs.shape
-
 
 best_val_loss = np.inf
 iter_ = 0
@@ -49,7 +53,7 @@ input = tf.placeholder(tf.float32, [batch_size, context_size*bptt_steps+context_
 tf_inputs = (input- mean)/mean
 tf_outputs = tf.placeholder(tf.uint8, [batch_size, context_size*bptt_steps, 1])
 tf_labels = tf.reshape(tf.one_hot(tf_outputs, depth=q_levels), [batch_size, context_size*bptt_steps, q_levels])
-t_model = model.sample_rnn(tf_inputs, tf_labels, batch_size=batch_size, bptt_steps=bptt_steps)
+t_model = model.sample_rnn(tf_inputs, tf_labels, batch_size=batch_size, context_size=context_size, bptt_steps=bptt_steps)
 
 # gradient clipping
 # to prevent gradient explosion
@@ -59,15 +63,7 @@ gradients, v = zip(*optimizer.compute_gradients(t_model.loss))
 gradients, _ = tf.clip_by_global_norm(gradients, 1.25)
 optimizer = optimizer.apply_gradients(zip(gradients, v), global_step=global_step)
 saver = tf.train.Saver()
-if not os.path.exists('../params'):	os.makedirs('../params')
-if not os.path.exists('../gen'):	os.makedirs('../gen')
-if not os.path.exists('../logs'):	os.makedirs('../logs')
-if not os.path.exists('../logs/train'):	os.makedirs('../logs/train')
-if not os.path.exists('../logs/valid'):	os.makedirs('../logs/valid')
 
-#summary
-tf.summary.scalar('loss', t_model.loss)
-summary_op = tf.summary.merge_all()
 
 print '='*80
 print 'architecture of train model..'
@@ -78,6 +74,8 @@ for var in tvars:
 	total_params += int(np.prod(list(var.get_shape())))
 print 'total params to be learnt: ', total_params
 print '='*80
+if not os.path.exists('/output/samples'):	os.makedirs('/output/samples')
+if not os.path.exists('/output/params'):	os.makedirs('/output/params')
 
 # saves generated output in ./gen/*.wav
 # iter_id.wav
@@ -86,10 +84,10 @@ g_input = tf.placeholder(tf.float32, [n_samples, context_size*2-1, 1])
 gtf_inputs = (g_input- mean)/mean
 gtf_outputs = tf.placeholder(tf.uint8, [n_samples, context_size, 1])
 gtf_labels = tf.reshape(tf.one_hot(gtf_outputs, depth=q_levels), [n_samples, context_size, q_levels])
-g_model = model.sample_rnn(gtf_inputs, gtf_labels, batch_size=n_samples, bptt_steps=1, generator=True)
+g_model = model.sample_rnn(gtf_inputs, gtf_labels, batch_size=n_samples, context_size=context_size, bptt_steps=1, generator=True)
 print '='*80
 
-def generate_samples(iter_, sess, gen_path='../gen/'):
+def generate_samples(iter_, sess, gen_path='/output/samples/'):
 	global inputs, context_size, n_samples, g_model, gtf_inputs, gtf_outputs, gtf_labels
 	indices = random.sample(range(inputs.shape[0]), n_samples)
 	data = []
@@ -129,22 +127,21 @@ def generate_samples(iter_, sess, gen_path='../gen/'):
 				g_model.generation_phase:True
 			}
 		)
-		#print input[0].flatten()
-		#print output[0].flatten()
+
 		input = output[:, -context_size:, :].astype(np.uint8)
 		outputs.append(input)
 	outputs = np.concatenate(outputs, axis=1)
 
 	for i in range(outputs.shape[0]):
 		out_file = str(iter_)+'_'+str(i)
-		du.save_file(gen_path+out_file, outputs[i].flatten(), bitrate, q_levels)
+		du.save_file(gen_path+out_file+'.wav', outputs[i].flatten(), bitrate, q_levels)
 
 # functions to dump and load state of the network
 # state includes (before saving weights) -
 # 1. best_val_loss, 2. iter_, 3. ep, 4. batch
 # states are dumped into ../logs/state.log
 def dump_state(loss, iter, epoch, batch):
-	file_name = '../logs/state.log'
+	file_name = '/output/state.log'
 	dict_ = {
 		'loss': loss,
 		'iter': iter,
@@ -158,7 +155,7 @@ def dump_state(loss, iter, epoch, batch):
 
 def load_state():
 	global best_val_loss, iter_, start_ep, start_batch, train_inputs
-	file_name = '../logs/state.log'
+	file_name = '/logs/state.log'
 	file = open(file_name, 'r')
 	json_ = file.read()
 	file.close()
@@ -174,29 +171,39 @@ def load_state():
 		start_batch = 0
 
 
+def plot_loss(x, y_list, path='/output/'):
+	#plt.figure()
+	plt.plot(x, y_list[0], 'ro-', label='train', linewidth=2)
+	plt.plot(x, y_list[1], 'go-', label='valid', linewidth=2)
+	plt.xlabel('iters')
+	plt.legend()
+	plt.grid(True)
+	plt.savefig(path+'loss.png')
+
 # tensorflow Session
 # begins here
 with tf.Session() as sess:
 	sess.run(tf.global_variables_initializer())
-	train_writer = tf.summary.FileWriter('../logs/train', tf.get_default_graph())
-	valid_writer = tf.summary.FileWriter('../logs/valid')
 
 	# load state of training
 	# and parameters of the neural network
-	if os.path.exists('../params/last_model.ckpt.meta'):
-		saver.restore(sess, '../params/last_model.ckpt')
+	if os.path.exists('/params/last_model.ckpt.meta'):
+		saver.restore(sess, '/params/last_model.ckpt')
 		print 'model restored from last checkpoint ..'
-	elif os.path.exists('../params/best_model.ckpt.meta'):
-		saver.restore(sess, '../params/best_model.ckpt')
+	elif os.path.exists('/params/best_model.ckpt.meta'):
+		saver.restore(sess, '/params/best_model.ckpt')
 		print 'model restored from last checkpoint ..'
 
 	z_state = sess.run(t_model.initial_state)
-	if os.path.exists('../logs/state.log'):
+	if os.path.exists('/logs/state.log'):
 		load_state()
 		print 'network state restored from last saved instance ..'
 
 	# training begins here
 	train_losses = []
+	mean_train_losses = []
+	mean_val_losses = []
+	iterations = []
 	for ep in range(start_ep, n_epochs):
 		for i in range(start_batch, train_inputs.shape[0]):
 			print '='*80
@@ -211,21 +218,20 @@ with tf.Session() as sess:
 				end_ptr = (j+1)*context_size*bptt_steps + context_size - 1
 				bptt_batch_x = current_batch[:, start_ptr:end_ptr, :]
 				bptt_batch_y = current_batch[:, start_ptr+context_size:end_ptr+1, :]
-				bptt_batch_loss, np_state, op, summary = \
-						sess.run([t_model.loss, t_model.final_state, optimizer, summary_op],
+				bptt_batch_loss, np_state, op = \
+						sess.run([t_model.loss, t_model.final_state, optimizer],
 							feed_dict={
 								input: bptt_batch_x,
 								tf_outputs: bptt_batch_y,
 								t_model.initial_state:np_state,
 								t_model.generation_phase:False
 							})
+
 				iter_+=1
 				train_losses.append(bptt_batch_loss)
 
-				# check and write summaries
 				if (iter_+1)%train_summary_freq==0:
-					print 'iter:', iter_, ', loss:', bptt_batch_loss
-					train_writer.add_summary(summary, iter_+1)
+					print 'iter:', iter_+1, 'train loss:', bptt_batch_loss
 
 				# check loss on validation data
 				if (iter_+1)%val_freq==0:
@@ -241,8 +247,8 @@ with tf.Session() as sess:
 							end_ptr = (j+1)*context_size*bptt_steps + context_size - 1
 							bptt_batch_x = current_batch[:, start_ptr:end_ptr, :]
 							bptt_batch_y = current_batch[:, start_ptr+context_size:end_ptr+1, :]
-							bptt_batch_loss, np_state, summary = \
-								sess.run([t_model.loss, t_model.final_state, summary_op],
+							bptt_batch_loss, np_state = \
+								sess.run([t_model.loss, t_model.final_state],
 									feed_dict={
 										input:bptt_batch_x,
 										tf_outputs:bptt_batch_y,
@@ -253,27 +259,31 @@ with tf.Session() as sess:
 							if (j*n_bptt_batches+k+1)%200==0.0:
 								print '\033[Fminibatch ({}/{}), validation loss : {:.7f}'.format((j)*n_bptt_batches+k+1, n_bptt_batches*valid_inputs.shape[0], bptt_batch_loss)
 					cur_val_loss = np.mean(val_losses)
-					valid_writer.add_summary(summary, iter_+1)
 					mean_train_loss = np.mean(train_losses)
 					train_losses = []
 					print 'mean train loss:', mean_train_loss
 					print 'mean validation loss:', cur_val_loss
 					print 'best validation loss so far:', best_val_loss
 
+					mean_train_losses.append(mean_train_loss)
+					mean_val_losses.append(cur_val_loss)
+					iterations.append(iter_+1)
+					#plot_loss(iterations, [mean_train_losses, mean_val_losses])
+					np.save('/output/loss_summary.npy', np.array([iterations, mean_train_losses, mean_val_losses]))
+
+
 					if cur_val_loss<best_val_loss:
 						print 'validation loss improved! {:.4f}->{:.4f}'.format(best_val_loss, cur_val_loss)
 						best_val_loss = cur_val_loss
-						save_path = saver.save(sess, "../params/best_model.ckpt")
+						save_path = saver.save(sess, "/output/params/best_model.ckpt")
 						print("Model saved in file: %s" % save_path)
 					else:
 						print 'validation loss did not improve.'
-						save_path = saver.save(sess, "../params/last_model.ckpt")
+						save_path = saver.save(sess, "/output/params/last_model.ckpt")
 						print("Model saved in file: %s" % save_path)
 					dump_state(float(best_val_loss), iter_, ep, i)
-					print 'state dumped at ../logs/state.log ..'
+					print 'state dumped at /output/state.log ..'
 					print '='*80
-
-
 
 				# generate some audio after Training
 				if (iter_+1)%gen_freq==0:
@@ -281,4 +291,4 @@ with tf.Session() as sess:
 					generate_samples(iter_, sess)
 					print '='*80
 
-		start_clip=0
+		start_batch=0
