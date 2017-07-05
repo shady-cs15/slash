@@ -4,6 +4,8 @@
 
 ![alt](https://shady-cs15.github.io/blogs/images/slash/samp-rnn.gif)
 
+# License
+MIT License
 
 # Results (generated over time)
 [link to video](https://www.youtube.com/watch?v=wYrbC7KOuNw)
@@ -17,6 +19,13 @@
 
 # Training model
 * run `$ python train_model.py`
+* weights are stored in `../params/` directory
+* logs are stored in `../logs/` directory
+* generated samples are stored in `../gen/` directory
+
+# Tensorboard visualization
+* training logs dir: `../logs/train/`
+* validation logs dir: `../logs/valid/`
 
 # Generating samples
 * samples are automatically generated after `gen_freq` iterations

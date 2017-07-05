@@ -1,4 +1,7 @@
 #===============================================================================
+# MIT License
+# Copyright (c) 2017 Satyaki Chakraborty
+
 # Pre processing script for wave quantization
 # segmentation and mask generation
 # Reads raw waves from ../waves/*.wav files

@@ -1,3 +1,15 @@
+#===============================================================================
+# MIT License
+# Copyright (c) 2017 Satyaki Chakraborty
+
+# contains the model
+# bptt_steps : bptt truncation threshold
+# q_levels : quantization levels / number of classes
+# n_rnn : number of rnns in rnn stack
+# n_mlp : number of mlps in mlp stack
+# generator: True, when using the model as a generative model
+#===============================================================================
+
 import tensorflow as tf
 
 class sample_rnn():

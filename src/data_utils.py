@@ -1,3 +1,13 @@
+#===============================================================================
+# MIT License
+# Copyright (c) 2017 Satyaki Chakraborty
+
+# load_file: read .wav file, normalizes it,
+# returns quantized wave form
+# save_file: takes quantized wave as input,
+# rescales it, writes into .wav file
+#===============================================================================
+
 import librosa
 import random
 import numpy as np

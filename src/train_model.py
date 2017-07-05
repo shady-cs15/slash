@@ -1,3 +1,14 @@
+#===============================================================================
+# MIT License
+# Copyright (c) 2017 Satyaki Chakraborty
+
+# contains code for training the model
+# configurations are read from settings.cfg
+# logs are stored in ../logs/ directory
+# weights are stored in ../params/ directory
+# generated samples are stored in ../gen/ directory
+#===============================================================================
+
 import os
 import numpy as np
 import model
