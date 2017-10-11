@@ -1,6 +1,7 @@
 # Slash
 - Teaching neural networks how to play guitar
 - Based on SampleRNN (Mehri et al. 2016)
+- Under progress!!
 
 ![alt](https://shady-cs15.github.io/blogs/images/slash/samp-rnn.gif)
 
